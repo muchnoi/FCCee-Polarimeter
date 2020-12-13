@@ -99,7 +99,7 @@ class Integrator(Pixels):
       self.ik = 1./self.k
       CX, RX = self.X_beam-0.5*(X1+X0), 2.0/(X1-X0); PX = self.X_pix*RX; self.sx_n = sx*RX
       CY, RY = self.Y_beam-0.5*(Y1+Y0), 2.0/(Y1-Y0); PY = self.Y_pix*RY; self.sy_n = sy*RY
-      self.iteration += 1;   print(' %d ' % (self.iteration))
+      self.iteration += 1;   print('iteration %d ' % (self.iteration))
       self.parset = self.curpar
       for xpix in range(self.X_npix): self.xmid_n[xpix] = (CX + (xpix+0.5)*self.X_pix)*RX
       for ypix in range(self.Y_npix): self.ymid_n[ypix] = (CY + (ypix+0.5)*self.Y_pix)*RY
