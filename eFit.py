@@ -219,7 +219,7 @@ def main(argv):
 
 
   cv.cd(4); cv.GetPad(4).SetGrid()
-  for binx in range(1, Pixels.X_npix/rebin_x):
+  for binx in range(1, Pixels.X_npix//rebin_x):
     for biny in range(1, Pixels.Y_npix):
       H = HDd.GetBinContent(binx, biny)
       if H:
