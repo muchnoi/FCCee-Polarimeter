@@ -8,10 +8,13 @@ Tested with python 3.85 [GCC 9.3.0] and ROOT 6.22/03 on Linux Mint kernel 5.4.0-
 1) Simulation parameters may be altered in the <b>hardware.py</b>. 
 2) Use <b>mc-compton.py</b> for Monte-Carlo generation of photon and electron distributions.
 3) The result will be saved to a root file with a name, similar to <b>Sun Dec 13 10:49:17 2020.root</b>.
-4) For fitting, alter this filename in <b>eFit.py</b> (somewhere around 140 line) and run the script.
-5) Bear in mind that the fitting procedure is quite long at this stage. On my Intel(R) Core(TM) i3-6100U CPU @ 2.30GHz laptop the fit (with default parameter set) converges after 197 iterations, which takes about 1 hour real time. If this method is ever used, the fitting procedure should definitely be improved.
+4) For fitting, alter the filename in <b>eFit.py</b> (somewhere around 140 line) and run the script.
+5) Bear in mind that the fitting procedure is quite long at this stage.<br> On my Intel(R) Core(TM) i3-6100U CPU @ 2.30GHz laptop the fit (with default parameter set) converges after 197 iterations, which takes 
+<pre>Real Time = 4115.06 seconds Cpu Time = 4122.41 seconds.</pre>
 
-The fit result is:
+If this method is ever used, the fitting procedure should definitely be improved.
+
+The fit result with default settings is:
 <pre>
  FCN=6447.49 FROM MIGRAD    STATUS=CONVERGED     208 CALLS         209 TOTAL
                      EDM=2.08144e-09    STRATEGY= 1  ERROR MATRIX UNCERTAINTY   0.8 per cent
