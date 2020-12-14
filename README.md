@@ -3,7 +3,7 @@ MC simulations for the project of FCC-ee Compton beam polarimeter.
 
 The method is discussed in the publication https://arxiv.org/abs/1803.09595.
 
-Tested with python 3.85 [GCC 9.3.0] and ROOT 6.22/03 on Linux Mint kernel 5.4.0-58-generic
+Tested with python 3.85 [GCC 9.3.0] and ROOT 6.22/03 (https://root.cern.ch/) on Linux Mint kernel 5.4.0-58-generic
 
 1) Simulation parameters may be altered in the <b>hardware.py</b>. 
 2) Use <b>mc-compton.py</b> for Monte-Carlo generation of photon and electron distributions.
