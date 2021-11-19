@@ -24,8 +24,6 @@ class MonteCarlo(Spectrometer):
     self.U.SetParameter(4, Spectrometer.pp4)
     self.U.SetNpx(1000)
     self.U.SetNpy(1000)
-#    self.u, self.phi = ROOT.Double(), ROOT.Double()
-#    self.bx, self.by = ROOT.Double(), ROOT.Double()
     cDouble = c_double*1
     self.u, self.phi = cDouble(), cDouble()
     self.bx, self.by = cDouble(), cDouble()
