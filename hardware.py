@@ -37,13 +37,13 @@ class Spectrometer:
   By     = 25.00                       # βy, m
   sx     = (ex/Bx)**0.5                # betatron energy spread in x, rad
   sy     = (ey/By)**0.5                # betatron energy spread in y, rad
-#  sx     = 0.001*sx
-#  sy     = 0.01*sy
+  sx     = 0.001*sx                    # 'zero' emittance case
+  sy     = 0.01*sy                     # 'zero' emittance case
   nsx    = gf*sx                       # betatron energy spread in x, 1/gf
   nsy    = gf*sy                       # betatron energy spread in y, 1/gf
   # polarization parameters:
   pp1    = 0.0 # №1: laser linear polarization degree ξ_1 [0:1]
   pp2    = 0.0 # №2: laser linear polarization angle φl   [0:2pi]
   pp3    = 0.0 # №3: e ζ_parallel      * laser ξ_3        [0:1]
-  pp4    = 0.1 # №4: e ζ_perpendicular * laser ξ_3        [0:1]
+  pp4    = 0.99 # №4: e ζ_perpendicular * laser ξ_3        [0:1]
 

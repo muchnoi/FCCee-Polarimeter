@@ -24,9 +24,9 @@ ROOT.gStyle.SetPalette(56)
 #ROOT.TColor.InvertPalette()
 
 
-rebin_x = 16
+rebin_x = 50
 rebin_y = 4
-files = ['HorPos50.root', 'HorNeg50.root']
+files = ['HorPos99.root', 'HorNeg99.root']
 HDe, HDp = [], []
 
 for i in range(2):

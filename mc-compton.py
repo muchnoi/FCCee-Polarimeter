@@ -14,7 +14,7 @@ class MonteCarlo(Spectrometer):
     self.rannor  = ROOT.gRandom.Rannor
     CCS = '([0]*(1+(1+x)**2) - 4*x/[0]*(1+x)*([0]-x)*(1-[1]*cos(2*(y-[2]))) + \
             [3]*x*(x+2)*([0]-2*x) - \
-            [4]*2*x*sqrt(x*([0]-x))*sin(y)) / [0]**2/(1+x)**3'
+            [4]*2*x*sqrt(x*([0]-x))*cos(y)) / [0]**2/(1+x)**3'
     self.U = ROOT.TF2('U', CCS)
     self.U.SetRange( 0, 0, Spectrometer.k, 2*pi)
     self.U.SetParameter(0, Spectrometer.k)
@@ -23,7 +23,7 @@ class MonteCarlo(Spectrometer):
     self.U.SetParameter(3, Spectrometer.pp3)
     self.U.SetParameter(4, Spectrometer.pp4)
     self.U.SetNpx(1000)
-    self.U.SetNpy(1000)
+    self.U.SetNpy(2000)
     cDouble = c_double*1
     self.u, self.phi = cDouble(), cDouble()
     self.bx, self.by = cDouble(), cDouble()
