@@ -5,85 +5,69 @@ from scipy             import fft                 as F_F_T
 from scipy.interpolate import RectBivariateSpline as R_B_S
 from hardware          import Constants, Pixels, Laser
 
-class ConvolutionFFT:                                       # Integration with convolution theorem
-  Rx, Ry  = 1.1, 1.1                                        # ratio of calculation range to unit radius
-  Nx, Ny  = 4096, 4096                                      # number of x,y divisions
-  Dx, Dy  = 2*Rx/Nx, 2*Ry/Ny                                # distance between neighbour knots
-  x    = np.linspace(Dx/2-Rx, Rx-Dx/2, num=Nx)              # knots positions in x
-  y    = np.linspace(Dy/2-Ry, Ry-Dy/2, num=Ny)              # knots positions in y
-  u    = F_F_T.fftshift(F_F_T.fftfreq(Nx, d=Dx))            # FFT frequencies in x 
-  v    = F_F_T.fftshift(F_F_T.fftfreq(Ny, d=Dy))            # FFT frequencies in y
-  u,v  = np.meshgrid(u, v)                                  # FFT frequencies in x and y
-  fim  = np.sinc(2*(u**2 + v**2)**0.5)                      # Fourier image of 1/π/sqrt(1-r**2)
+class xSection:
+  Rx, Ry     = 1.5, 1.5                                     # ratio of calculation range to unit radius
+  Nx, Ny     = 2048, 2048                                   # number of x,y divisions
+  Dx, Dy     = 2*Rx/Nx, 2*Ry/Ny                             # distance between neighbour knots
+  x          = np.linspace(Dx/2-Rx, Rx-Dx/2, num=Nx)        # knots positions in x
+  y          = np.linspace(Dy/2-Ry, Ry-Dy/2, num=Ny)        # knots positions in y
+  Y, X       = np.meshgrid(y, x)                            # knots grid in x and y
+  νx         = F_F_T.fftshift(F_F_T.fftfreq(Nx, d=Dx))      # FFT frequencies in x 
+  νy         = F_F_T.fftshift(F_F_T.fftfreq(Ny, d=Dy))      # FFT frequencies in y
+  νy, νx     = np.meshgrid(νy, νx)                          # FFT grid in νx and νy
+  img        = np.sinc(2*(νx**2 + νy**2)**0.5)              # Fourier image of 1/π/sqrt(1-r**2)
+  emittance  = [None, None]
+  stockspar  = [None, None, None]
 
-  def __init__(self, σx, σy):                               # Calculates the Convolution
-    J = self.fim * np.exp(-2*π*π*((σx*self.v)**2 + (σy*self.u)**2))
-    R = np.abs(F_F_T.ifftshift(F_F_T.irfft2(J, s=[self.Ny, self.Nx], workers=2, norm='forward')))
-    limits = [None, None, None, None]
-    self.SP =  R_B_S(self.y, self.x, R, bbox=limits, kx=3, ky=3 )              # this is the RectBivariateSpline
-    print('fft: {:8.6f} {:8.6f} '.format(σx, σy), end = '')
+  def __init__(self, κ):
+    print('xSection init . . . ', end='')
+    uoκ      = (1 + self.X)/2                               # u over kappa
+    u        = κ*uoκ                                        # u
+    idn      = 1/(κ*(1+u)**3)                               # inverse denominator
+    self.xso = idn*(1 + (1+u)**2 - 4*uoκ*(1+u)*(1-uoκ))     # unpolarized xSection
+    self.xsy = idn*u*self.Y                                 # transverse vertical electron polarization
+    self.xsz = idn*u*(u + 2)*(1 - 2*uoκ)                    # longitudinal electron polarization
+    print('done.')
 
-  def __call__(self, xa, xb, ya, yb):                       # Call with integration range [xa,xb] [ya,yb] 
-    return self.SP.integral(xa, xb, ya, yb)                 # Integration by Interpolation
+  def Prepare(self, parameters):
+    ζx, ζy, ζz, σx, σy, norm = parameters
+    if [σx, σy]     != self.emittance:
+      self.emittance = [σx, σy]
+      fg             = self.img * np.exp(-2*π*π*((σx*self.νx)**2 + (σy*self.νy)**2))             # Fourier image by convolution theorem
+      self.cvl       = np.abs(F_F_T.ifftshift(F_F_T.irfft2(fg, s=[self.Ny, self.Nx], workers=-1, norm='forward'))) # convolution result
+      print('emittance: σx={:8.6f} σy={:8.6f} '.format(σx, σy))#, end = '')
+    if [ζx, ζy, ζz] != self.stockspar:
+      self.stockspar = [ζx, ζy, ζz]
+      self.xst       = self.xso + ζy*self.xsy + ζz*self.xsz
+      print('stockspar: ζx={:8.6f} ζy={:8.6f} ζz={:8.6f} '.format(ζx, ζy, ζz))#, end = '')
+    self.BLUR      =  R_B_S(self.y, self.x, norm*self.cvl*self.xst, kx=3, ky=3 )  # this is the RectBivariateSpline
 
 
-class XSection(Pixels):
-  def __init__(self):
-    self.iteration = 0
-    self.xmid_n    = np.zeros((self.X_npix             ), dtype=np.float64)
-    self.ymid_n    = np.zeros((self.Y_npix             ), dtype=np.float64)
-    self.Compton   = np.zeros((self.X_npix, self.Y_npix), dtype=np.float64)
-    self.ellipse, self.compton, self.spreads = [], [], []
-
-  def xSection(self):
-    σx, σy         = self.spreads
-    k, zx, zy, zz  = self.compton
-    Xmax, Ymax     = 1 + σx/2, 1 + σy/2
-    Rmax           = (Xmax**2 + Ymax**2)**0.5
-    for i in range(self.X_npix):
-      X   = self.xmid_n[i];  X2  = X*X
-      if X > Rmax:
-        for j in range(self.Y_npix): self.Compton[i][j] = 0.0
-      else:
-        uok = (1 + X)/2;                 u   = k*uok;             v   = 1 + u
-        CSU = 1 + v*v - 4*uok*v*(1-uok); CSL = u*(u+2)*(1-2*uok); iCS = 1/(k*v*v*v)
-        for j in range(self.Y_npix):
-          Y = self.ymid_n[j]
-          R = (X2+Y**2)**0.5
-          if R > Rmax:  self.Compton[i][j] = 0.0
-          else:         self.Compton[i][j] = (CSU + zy*u*Y + zz*CSL)*iCS
-
+class Pixel2D(Pixels):
+  def __init__(self, k):
+    self.iteration, self.ellipse, self.compton = 0, [], []
+    self.xmid_n = np.zeros((self.X_npix), dtype=np.double)
+    self.ymid_n = np.zeros((self.Y_npix), dtype=np.double)
+    self.XS     = xSection(k)
+    self.Ax, self.Bx = 1/self.X_pix, - self.X_beam/self.X_pix
+    self.Ay, self.By = 1/self.Y_pix, - self.Y_beam/self.Y_pix
 
   def __call__(self,x,p):
-    ellipse = [p[i] for i in (0,1,2,3)]
-    compton = [p[i] for i in (4,5,6,7)]
-    spreads = σx, σy = [p[i] for i in (8,9)]
-    parameters_has_changed = False
-    if self.spreads != spreads:          # if emittance parameters changed
-      self.spreads   = spreads
-      self.BLUR = ConvolutionFFT(σx, σy) # σx, σy are in arbitrary units
-      if self.ellipse == ellipse:  self.SPLINE = self.BLUR.SP(self.xmid_n, self.ymid_n)
-      parameters_has_changed = True
+    ellipse, compton, change = [p[i] for i in (0,1,2,3)], [p[i] for i in (4,5,6,7,8,9)], False
+    if self.compton != compton: # if Compton parameters changed
+      self.compton, change = compton, True
+      self.XS.Prepare(compton)
     if self.ellipse != ellipse: # if geometry parameters changed
-      self.ellipse = X0, X1, Y0, Y1 = ellipse
+      self.ellipse = X0, X1, Y0, Y1 = ellipse; change = True
       # 1) center position [mm]        2) unit radius [1/mm]
       CX = self.X_beam - (X1 + X0)/2;  RX = 2/(X1-X0)
       CY = self.Y_beam - (Y1 + Y0)/2;  RY = 2/(Y1-Y0)
       for xpix in range(self.X_npix):  self.xmid_n[xpix] = RX*(CX + (xpix+0.5)*self.X_pix)
       for ypix in range(self.Y_npix):  self.ymid_n[ypix] = RY*(CY + (ypix+0.5)*self.Y_pix)
-      self.SPLINE = self.BLUR.SP(self.xmid_n, self.ymid_n)
-      if self.compton == compton: self.xSection()
-      parameters_has_changed = True
-    if self.compton != compton: # if Compton parameters changed
-      self.compton = compton
-      self.xSection()
-      parameters_has_changed = True
-    if parameters_has_changed:
-      self.Results = self.SPLINE*self.Compton
-      self.iteration += 1;   print('iteration %d ' % (self.iteration))
-    xpix = int((x[0]-self.X_beam) / self.X_pix)
-    ypix = int((x[1]-self.Y_beam) / self.Y_pix)
-    return p[10]*self.Results[xpix][ypix]
+    if change:
+      self.SPLINE = self.XS.BLUR(self.xmid_n, self.ymid_n)
+      self.iteration += 1;   print('iteration: %d ' % (self.iteration))
+    return self.SPLINE[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
 
 def cpuinfo():
   with open('/proc/cpuinfo', 'r') as f: info = f.readlines()
@@ -125,22 +109,21 @@ def main(argv):
   HDd = HDe.Clone()
   HDd.SetStats(0)
 
-  X0 = Pixels.X_beam; X1 = X0 + Pixels.X_size
-  Y0 = Pixels.Y_beam; Y1 = Y0 + Pixels.Y_size
-  
-  fitf = XSection()
-  FXY = ROOT.TF2('FXY', fitf , X0, X1, Y0, Y1, 11)
-  FXY.SetParName(0, 'X_{0}');         FXY.SetParameter(0,   -0.004)  # beam position x, mm
-  FXY.SetParName(1, 'X_{1}');         FXY.SetParameter(1,  347.66)  # edge position x, mm
+  Xfrom = Pixels.X_beam; Xto = Xfrom + Pixels.X_size
+  Yfrom = Pixels.Y_beam; Yto = Yfrom + Pixels.Y_size
+  fitf = Pixel2D(k)
+
+  FXY = ROOT.TF2('FXY', fitf , Xfrom, Xto, Yfrom, Yto, 10)
+  FXY.SetParName(0, 'X_{0}');         FXY.SetParameter(0,    0.004)  # beam position x, mm
+  FXY.SetParName(1, 'X_{1}');         FXY.SetParameter(1,   347.66)  # edge position x, mm
   FXY.SetParName(2, 'Y_{0}');         FXY.SetParameter(2,   -1.068)  # y_min, mm
   FXY.SetParName(3, 'Y_{1}');         FXY.SetParameter(3,    1.068)  # y_max, mm
-  FXY.SetParName(4, '#kappa');        FXY.SetParameter(4,       k )  # κ (kappa)
-  FXY.SetParName(5, '#zeta_{x}');     FXY.SetParameter(5,      0.0); FXY.SetParLimits(5, -1.0, 1.0)
-  FXY.SetParName(6, '#zeta_{y}');     FXY.SetParameter(6,      0.0); FXY.SetParLimits(6, -1.0, 1.0)
-  FXY.SetParName(7, '#zeta_{z}');     FXY.SetParameter(7,      0.0); FXY.SetParLimits(7, -1.0, 1.0)
-  FXY.SetParName(8, '#sigma_{x}');    FXY.SetParameter(8,    0.001); FXY.SetParLimits(8, 0.0001, 0.1) # σ_x [a.u.]
-  FXY.SetParName(9, '#sigma_{y}');    FXY.SetParameter(9,    0.025); FXY.SetParLimits(9, 0.0001, 0.1) # σ_y [a.u.]
-  FXY.SetParName(10,'norm');          FXY.SetParameter(10,     3e+2)  # amplitude
+  FXY.SetParName(4, '#zeta_{x}');     FXY.SetParameter(4,      0.0); FXY.SetParLimits(4, -1.0, 1.0)
+  FXY.SetParName(5, '#zeta_{y}');     FXY.SetParameter(5,      0.0); FXY.SetParLimits(5, -1.0, 1.0)
+  FXY.SetParName(6, '#zeta_{z}');     FXY.SetParameter(6,      0.0); FXY.SetParLimits(6, -1.0, 1.0)
+  FXY.SetParName(7, '#sigma_{x}');    FXY.SetParameter(7,    0.001); FXY.SetParLimits(7, 0.0001, 0.1) # σ_x [a.u.]
+  FXY.SetParName(8, '#sigma_{y}');    FXY.SetParameter(8,    0.025); FXY.SetParLimits(8, 0.0001, 0.1) # σ_y [a.u.]
+  FXY.SetParName(9, 'norm');          FXY.SetParameter(9,     2e+2)  # amplitude
 
   cv = ROOT.TCanvas('cv','cv',10,10,1200,1000)
   cv.Divide(2,2)
@@ -152,7 +135,7 @@ def main(argv):
   success = False
   ROOT.gBenchmark.Start( '2DFit' )
   if FIT:
-    fixed_parameters = [4,5]
+    fixed_parameters = [4]
     for p in fixed_parameters: FXY.FixParameter(p, FXY.GetParameter(p))
     Result = HDe.Fit(FXY, 'SVNP')
     success = not Result.Status()
@@ -215,10 +198,10 @@ def main(argv):
     pt.AddText('X_{1} = %08.3f #pm %5.3f mm' % (X1, dX1))
     pt.AddText('X_{2} = %08.3f #pm %5.3f mm' % (X2, dX2))
 #    pt.AddText('#zeta_{x} = %05.3f #pm %5.3f' % (FXY.GetParameter(5), FXY.GetParError(5)))
-    pt.AddText('#zeta_{y} = %05.3f #pm %5.3f' % (FXY.GetParameter(6), FXY.GetParError(6)))
-    pt.AddText('#zeta_{z} = %05.3f #pm %5.3f' % (FXY.GetParameter(7), FXY.GetParError(7)))
-    pt.AddText('#sigma_{x} = %5.1f #pm %4.1f #mum' % (500*FXY.GetParameter(8)*A, 500*FXY.GetParError(8)*A))
-    pt.AddText('#sigma_{y} = %5.2f #pm %4.2f #mum' % (500*FXY.GetParameter(9)*B, 500*FXY.GetParError(9)*B))
+    pt.AddText('#zeta_{y} = %05.3f #pm %5.3f' % (FXY.GetParameter(5), FXY.GetParError(5)))
+    pt.AddText('#zeta_{z} = %05.3f #pm %5.3f' % (FXY.GetParameter(6), FXY.GetParError(6)))
+    pt.AddText('#sigma_{x} = %5.1f #pm %4.1f #mum' % (500*FXY.GetParameter(7)*A, 500*FXY.GetParError(7)*A))
+    pt.AddText('#sigma_{y} = %5.2f #pm %4.2f #mum' % (500*FXY.GetParameter(8)*B, 500*FXY.GetParError(8)*B))
     pt.AddText('E_{beam} = %7.4f #pm %6.4f GeV. ' % (Eo*1.e-9, dEo*1.e-9))
     pt.Draw()
 
