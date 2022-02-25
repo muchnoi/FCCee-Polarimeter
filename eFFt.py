@@ -6,47 +6,50 @@ from scipy.interpolate import RectBivariateSpline as R_B_S
 from hardware          import Constants, Pixels, Laser
 
 class xSection:
-  Rx, Ry     = 1.5, 1.5                                     # ratio of calculation range to unit radius
-  Nx, Ny     = 2048, 2048                                   # number of x,y divisions
-  Dx, Dy     = 2*Rx/Nx, 2*Ry/Ny                             # distance between neighbour knots
-  x          = np.linspace(Dx/2-Rx, Rx-Dx/2, num=Nx)        # knots positions in x
-  y          = np.linspace(Dy/2-Ry, Ry-Dy/2, num=Ny)        # knots positions in y
+  R          = 1.5                                          # calculation range in unit radius
+  N          = 2048                                         # number of x,y divisions
+  D          = 2*R/N                                        # distance between neighbour knots
+  x          = np.linspace(D/2-R, R-D/2, num=N)             # knots positions in x
+  y          = np.linspace(D/2-R, R-D/2, num=N)             # knots positions in y
   Y, X       = np.meshgrid(y, x)                            # knots grid in x and y
-  νx         = F_F_T.fftshift(F_F_T.fftfreq(Nx, d=Dx))      # FFT frequencies in x 
-  νy         = F_F_T.fftshift(F_F_T.fftfreq(Ny, d=Dy))      # FFT frequencies in y
+  νx         = F_F_T.fftshift(F_F_T.fftfreq(N, d=D))        # FFT frequencies in x 
+  νy         = F_F_T.fftshift(F_F_T.fftfreq(N, d=D))        # FFT frequencies in y
   νy, νx     = np.meshgrid(νy, νx)                          # FFT grid in νx and νy
-  img        = np.sinc(2*(νx**2 + νy**2)**0.5)              # Fourier image of 1/π/sqrt(1-r**2)
+  tiny       = np.finfo(float).tiny**0.5
+  ρ          = 2*π*(νx**2 + νy**2)**0.5 + tiny
+  Hankel     = np.sin(ρ)/ρ                                 # numpy function sinc(x) = sin(πx)/(πx)
   emittance  = [None, None]
   stockspar  = [None, None, None]
 
   def __init__(self, κ):
     uoκ      = (1 + self.X)/2                               # u over kappa
     u        = κ*uoκ                                        # u
-    idn      = 1/(κ*(1+u)**3)                               # inverse denominator
-    self.xso = idn*(1 + (1+u)**2 - 4*uoκ*(1+u)*(1-uoκ))     # unpolarized xSection
+    idn      = 1/(1+u)**3                                   # inverse denominator
+    self.xso = idn*(1 + (1+u)**2 - (1+u)*(1-self.X**2))     # unpolarized xSection
+    self.xsl = idn*(1 - self.X**2 - 2*self.Y**2)*(1+u)      # vert/hor linear laser polarization ξ1
     self.xsy = idn*u*self.Y                                 # transverse vertical electron polarization
-    self.xsz = idn*u*(u + 2)*(1 - 2*uoκ)                    # longitudinal electron polarization
+    self.xsz = idn*u*(u + 2)*self.X                         # longitudinal electron polarization
 
   def Prepare(self, parameters):
-    ζx, ζy, ζz, σx, σy, norm = parameters
+    ξ, ζy, ζz, σx, σy, norm = parameters
     if [σx, σy]     != self.emittance:
       self.emittance = [σx, σy]
-      fg             = self.img * np.exp(-2*π*π*((σx*self.νx)**2 + (σy*self.νy)**2))             # Fourier image by convolution theorem
-      self.cvl       = np.abs(F_F_T.ifftshift(F_F_T.irfft2(fg, s=[self.Ny, self.Nx], workers=-1, norm='forward'))) # convolution result
+      HA             = self.Hankel * np.exp(-2*π*π*((σx*self.νx)**2 + (σy*self.νy)**2))        # Fourier image by convolution theorem
+      self.cvl       = np.abs(F_F_T.ifftshift(F_F_T.irfft2(HA, s=[self.N, self.N], workers=-1, norm='forward'))) # convolution result
       print('emittance: σx={:8.6f} σy={:8.6f} '.format(σx, σy))#, end = '')
-    if [ζx, ζy, ζz] != self.stockspar:
-      self.stockspar = [ζx, ζy, ζz]
-      self.xst       = self.xso + ζy*self.xsy + ζz*self.xsz
-      print('stockspar: ζx={:8.6f} ζy={:8.6f} ζz={:8.6f} '.format(ζx, ζy, ζz))#, end = '')
-    self.BLUR      =  R_B_S(self.y, self.x, norm*self.cvl*self.xst, kx=3, ky=3 )  # this is the RectBivariateSpline
+    if [ξ, ζy, ζz] != self.stockspar:
+      self.stockspar = [ξ, ζy, ζz]
+      self.xst        = (self.xso + ξ*self.xsl + ζy*self.xsy + ζz*self.xsz)
+      print('stockspar: ξ={:8.6f} ζy={:8.6f} ζz={:8.6f} '.format(ξ, ζy, ζz))#, end = '')
+    self.BLUR      =  R_B_S(self.y, self.x, norm*self.xst*self.cvl, kx=3, ky=3 )  # this is the RectBivariateSpline
 
 
 class Electrons2D(Pixels):
-  def __init__(self, k):
+  def __init__(self, κ):
     self.iteration, self.ellipse, self.compton = 0, [], []
     self.xmid_n      = np.zeros((self.X_npix), dtype=np.double)
     self.ymid_n      = np.zeros((self.Y_npix), dtype=np.double)
-    self.XS          = xSection(k)
+    self.XS          = xSection(κ)
     self.Ax, self.Bx = 1/self.X_pix, - self.X_beam/self.X_pix
     self.Ay, self.By = 1/self.Y_pix, - self.Y_beam/self.Y_pix
 
@@ -76,7 +79,6 @@ def cpuinfo():
 
 class POLARIMETER(Pixels):
   DataMC = {}
-
   def __init__(self):
     beam  = {
             'unpol-4x'           :'Thu Jan 27 19:28:31 2022.root',
@@ -84,9 +86,11 @@ class POLARIMETER(Pixels):
             'x=0.5'              :'Thu Dec  2 14:13:04 2021.root',
             'x=0.5, y=0.5'       :'Thu Dec  2 14:06:51 2021.root',
             'x=0.5, y=0.5, z=0.5':'Thu Dec  2 13:53:13 2021.root',
+            'pure linear, φo=π/2':'Mon Feb  7 18:51:26 2022.root',
+            'pure linear, φo=0'  :'Mon Feb  7 18:55:53 2022.root',
             }
     XYD   = ROOT.TList()
-    hfile = ROOT.TFile(beam['unpol'])
+    hfile = ROOT.TFile(beam['pure linear, φo=0'])
     name  = hfile.GetListOfKeys()[0].GetName()
     XYD   = hfile.Get(name)
     hfile.Close()
@@ -96,26 +100,26 @@ class POLARIMETER(Pixels):
 
   def SetFunction(self):
     self.fitf = Electrons2D(self.DataMC['κ'])
-    Xfrom = Pixels.X_beam; Xto = Xfrom + Pixels.X_size
-    Yfrom = Pixels.Y_beam; Yto = Yfrom + Pixels.Y_size
-    self.FXY = ROOT.TF2('FXY', self.fitf , Xfrom, Xto, Yfrom, Yto, 10)
-    self.FXY.SetParName(0, 'X_{1}');       self.FXY.SetParameter(0,  -0.01)  # beam position x, mm
-    self.FXY.SetParName(1, 'X_{2}');       self.FXY.SetParameter(1,  347.5)  # edge position x, mm
-    self.FXY.SetParName(2, 'Y_{0}');       self.FXY.SetParameter(2, -1.068)  # y_min, mm
-    self.FXY.SetParName(3, 'Y_{1}');       self.FXY.SetParameter(3,  1.068)  # y_max, mm
-    self.FXY.SetParName(4, '#zeta_{x}');   self.FXY.SetParameter(4,    0.0); self.FXY.SetParLimits(4, -1.0, 1.0)
-    self.FXY.SetParName(5, '#zeta_{y}');   self.FXY.SetParameter(5,    0.0); self.FXY.SetParLimits(5, -1.0, 1.0)
-    self.FXY.SetParName(6, '#zeta_{z}');   self.FXY.SetParameter(6,    0.0); self.FXY.SetParLimits(6, -1.0, 1.0)
-    self.FXY.SetParName(7, '#sigma_{x}');  self.FXY.SetParameter(7,  0.001); self.FXY.SetParLimits(7, 0.0001, 0.1) # σ_x [a.u.]
-    self.FXY.SetParName(8, '#sigma_{y}');  self.FXY.SetParameter(8,  0.026); self.FXY.SetParLimits(8, 0.0001, 0.1) # σ_y [a.u.]
-    self.FXY.SetParName(9, 'norm');        self.FXY.SetParameter(9,   2e+2)  # amplitude
-    self.FXY.SetNpx(Pixels.X_npix);        self.FXY.SetNpy(Pixels.Y_npix)
-    self.FXY.SetTitle('F(x,y)');           self.FXY.GetXaxis().SetTitle('X, mm')
+    X0 = Pixels.X_beam; X1 = X0 + Pixels.X_size
+    Y0 = Pixels.Y_beam; Y1 = Y0 + Pixels.Y_size
+    self.FXY = ROOT.TF2('FXY', self.fitf , X0, X1, Y0, Y1, 10)
+    self.FXY.SetParName(0, 'X_{1}');      self.FXY.SetParameter(0,  -0.01)  # beam position x, mm
+    self.FXY.SetParName(1, 'X_{2}');      self.FXY.SetParameter(1,  347.5)  # edge position x, mm
+    self.FXY.SetParName(2, 'Y_{0}');      self.FXY.SetParameter(2, -1.068)  # y_min, mm
+    self.FXY.SetParName(3, 'Y_{1}');      self.FXY.SetParameter(3,  1.068)  # y_max, mm
+    self.FXY.SetParName(4, '#xi');        self.FXY.SetParameter(4,    1.0); self.FXY.SetParLimits(4,  -1.0, 1.0)
+    self.FXY.SetParName(5, '#zeta_{y}');  self.FXY.SetParameter(5,    0.0); self.FXY.SetParLimits(5,  -1.0, 1.0)
+    self.FXY.SetParName(6, '#zeta_{z}');  self.FXY.SetParameter(6,    0.0); self.FXY.SetParLimits(6,  -1.0, 1.0)
+    self.FXY.SetParName(7, '#sigma_{x}'); self.FXY.SetParameter(7, 1.3e-3); self.FXY.SetParLimits(7,  0.0001, 0.1) # σ_x [a.u.]
+    self.FXY.SetParName(8,'#sigma_{y}');  self.FXY.SetParameter(8, 2.6e-2); self.FXY.SetParLimits(8, 0.0001, 0.1) # σ_y [a.u.]
+    self.FXY.SetParName(9,'norm');        self.FXY.SetParameter(9, 1.2e+2)  # amplitude
+    self.FXY.SetNpx(Pixels.X_npix);       self.FXY.SetNpy(Pixels.Y_npix)
+    self.FXY.SetTitle('F(x,y)');          self.FXY.GetXaxis().SetTitle('X, mm')
 
   def FitElectrons2D(self):
-    fixed_parameters = [4]
+    fixed_parameters = [5,6]
     for p in fixed_parameters: self.FXY.FixParameter(p, self.FXY.GetParameter(p))
-    self.FitElectronsResult = self.HDe.Fit(self.FXY, 'SVNP')
+    self.FitElectronsResult =  self.HDe.Fit(self.FXY, 'SVNP') # Use Pearsons chi-square method
     for p in fixed_parameters: self.FXY.ReleaseParameter(p)
     return not self.FitElectronsResult.Status()
 
@@ -127,8 +131,7 @@ class POLARIMETER(Pixels):
         if H:
           F = self.FXY.Eval(Pixels.X_beam + (binx-0.5)*Pixels.X_pix, Pixels.Y_beam + (biny-0.5)*Pixels.Y_pix)
           self.HDd.SetBinContent(binx, biny, (F - H)/(1+abs(F))**0.5)
-        else:
-          self.NZeros += 1
+        else: self.NZeros += 1
     self.HDd.SetTitle('(F(x,y) - H(x,y)) / (1+F(x,y))^{1/2}')
 
 
@@ -160,6 +163,7 @@ class POLARIMETER(Pixels):
     self.ResultsTable.AddText('X_{0} = %08.3f #pm %5.3f mm' % (X0, dX0))
     self.ResultsTable.AddText('X_{1} = %08.3f #pm %5.3f mm' % (X1, dX1))
     self.ResultsTable.AddText('X_{2} = %08.3f #pm %5.3f mm' % (X2, dX2))
+    self.ResultsTable.AddText('#xi_{1} = %05.3f #pm %5.3f'  % (self.FXY.GetParameter(4), self.FXY.GetParError(4)))
     self.ResultsTable.AddText('#zeta_{y} = %05.3f #pm %5.3f' % (self.FXY.GetParameter(5), self.FXY.GetParError(5)))
     self.ResultsTable.AddText('#zeta_{z} = %05.3f #pm %5.3f' % (self.FXY.GetParameter(6), self.FXY.GetParError(6)))
     self.ResultsTable.AddText('#sigma_{x} = %5.1f #pm %4.1f #mum' % (500*self.FXY.GetParameter(7)*A, 500*self.FXY.GetParError(7)*A))
@@ -195,6 +199,8 @@ def main(argv):
   if success: 
     DATA.ElectronsResults()
     LOOK.ShowOnPad(nPad=2, entity = DATA.ResultsTable)
+  else:
+    LOOK.ShowOnPad(nPad=2, entity = DATA.HDp, grid = True, goption='COLZ1')
   input()
   exit()
 
