@@ -16,12 +16,12 @@ class POLARIMETER:
     beam  = {
             'test'               :'Tue Feb 22 16:45:20 2022.root',
             }
-    XYD   = ROOT.TList()
+#    XYD   = ROOT.TList()
     hfile = ROOT.TFile(beam['test'])
     name  = hfile.GetListOfKeys()[0].GetName()
     XYD   = hfile.Get(name)
     hfile.Close()
-    for i in range(11): self.DataMC[['λo','Eo','κ','γ','θo','ξ1','ξ2','ξ3','ζx','ζy','ζz'][i]]=[float(p) for p in name.split()][i]
+    for i in range(11): self.DataMC[['λo','Eo','κ','γ','θo','ξ1','ξ2','ξ3','ζx','ζy','ζz'][i]] = [float(p) for p in name.split()][i]
     self.HDp, self.DDp = XYD[0], XYD[0].Clone()
     self.HDe, self.DDe = XYD[1], XYD[1].Clone()
     self.HDe.SetStats(0); self.HDe.SetTitle('Electrons: MC')
@@ -32,14 +32,14 @@ class POLARIMETER:
   def ParametersMC(self):
 #  'λo','Eo','κ','γ','θo','ξ1','ξ2','ξ3','ζx','ζy','ζz'
     self.ParametersTable = ROOT.TPaveText(.05, .05, .95, .96)
-    self.ParametersTable.AddText('Simulation Parameters:')
+    self.ParametersTable.AddText('Monte-Carlo Parameters:')
     self.ParametersTable.AddText('Electron E_{0} = %6.3f GeV' %         (1e-9*self.DataMC['Eo']))
     self.ParametersTable.AddText('Laser #lambda_{0} = %5.3f um' % (1e+4*self.DataMC['λo']))
     self.ParametersTable.AddText('Electron #gamma = %5.3f#times10^{3}'% (1e-3*self.DataMC['γ']))
     self.ParametersTable.AddText('Compton #kappa = %5.3f'      %       (     self.DataMC['κ']))
     self.ParametersTable.AddText('Bend: #gamma#theta_{0} = %5.3f'  % (     self.DataMC['θo']))
-    self.ParametersTable.AddText('[#xi_{1}, #xi_{2}, #xi_{3}] = [%6.3f, %6.3f, %6.3f]'%(self.DataMC['ξ1'],self.DataMC['ξ2'],self.DataMC['ξ3']))
-    self.ParametersTable.AddText('[#zeta_{x}, #zeta_{y}, #zeta_{z}] = [%6.3f, %6.3f, %6.3f]'%(self.DataMC['ζx'],self.DataMC['ζy'],self.DataMC['ζz']))
+    self.ParametersTable.AddText('(#xi_{1}, #xi_{2}, #xi_{3}) = (%6.3f, %6.3f, %6.3f)'%(self.DataMC['ξ1'],self.DataMC['ξ2'],self.DataMC['ξ3']))
+    self.ParametersTable.AddText('(#zeta_{x}, #zeta_{y}, #zeta_{z}) = (%6.3f, %6.3f, %6.3f)'%(self.DataMC['ζx'],self.DataMC['ζy'],self.DataMC['ζz']))
 
   def ElectronsSetFunction(self):
     self.efit = ePIXELS()
@@ -60,23 +60,11 @@ class POLARIMETER:
     self.EXY.SetTitle('Electrons: Fit'); self.EXY.GetXaxis().SetTitle('X, mm')
 
   def FitElectrons(self):
-    fixed_parameters = [4,5,6]
+    fixed_parameters = []
     for p in fixed_parameters: self.EXY.FixParameter(p, self.EXY.GetParameter(p))
     self.FitElectronsResult =  self.HDe.Fit(self.EXY, 'SVNP') # Use Pearsons chi-square method
     for p in fixed_parameters: self.EXY.ReleaseParameter(p)
     return not self.FitElectronsResult.Status()
-
-  def ElectronsResiduals(self):
-    self.eZeros = 0
-    for binx   in range(1, EPD.X_npix+1):
-      for biny in range(1, EPD.Y_npix+1):
-        H = self.DDe.GetBinContent(binx, biny)
-        if H:
-          F = self.EXY.Eval(EPD.X_beam + (binx-0.5)*EPD.X_pix, EPD.Y_beam + (biny-0.5)*EPD.Y_pix)
-          self.DDe.SetBinContent(binx, biny, (F - H)/(1+abs(F))**0.5)
-        else: self.eZeros += 1
-    print ('NeZero=', self.eZeros)
-    self.DDe.SetTitle('Electrons: (Fit - MC)/(1+Fit)^{1/2}')
 
   def PhotonsSetFunction(self):
     self.pfit = pPIXELS()
@@ -103,6 +91,18 @@ class POLARIMETER:
     for p in fixed_parameters: self.PXY.ReleaseParameter(p)
     return not self.FitPhotonsResult.Status()
 
+  def ElectronsResiduals(self):
+    self.eZeros = 0
+    for binx   in range(1, EPD.X_npix+1):
+      for biny in range(1, EPD.Y_npix+1):
+        F = self.EXY.Eval(EPD.X_beam + (binx-0.5)*EPD.X_pix, EPD.Y_beam + (biny-0.5)*EPD.Y_pix)
+        if F>0.01:
+          H = self.DDe.GetBinContent(binx, biny)
+          self.DDe.SetBinContent(binx, biny, (F - H)/(1+abs(F))**0.5)
+        else: self.eZeros += 1
+    print ('NeZero=', self.eZeros)
+    self.DDe.SetTitle('Electrons: (Fit - MC)/(1+Fit)^{1/2}')
+
   def PhotonsResiduals(self):
     self.pZeros = 0
     for binx   in range(1, PPD.X_npix+1):
@@ -113,28 +113,6 @@ class POLARIMETER:
           self.DDp.SetBinContent(binx, biny, (F - H)/(1+abs(F))**0.5)
         else: self.pZeros += 1
     self.DDp.SetTitle('Photons: (Fit - MC)/(1+Fit)^{1/2}')
-
-
-  def PhotonsResults(self):
-    chi2 = self.FitPhotonsResult.Chi2(); print('Chi2: %f'        % (chi2))
-    NDF  = self.FitPhotonsResult.Ndf();  print('NDF: %d'         % (NDF) )
-    prob = self.FitPhotonsResult.Prob(); print('Probability: %f' % (prob))
-    NDF -= self.pZeros;                  prob = ROOT.TMath.Prob(chi2, NDF)
-    X0   = self.PXY.GetParameter(0);     dX0  = self.PXY.GetParError(0) 
-    Y0   = self.PXY.GetParameter(1);     dY0  = self.PXY.GetParError(1)
-    self.PhotonsTable = ROOT.TPaveText(.05, .05, .95, .96)
-    self.PhotonsTable.AddText(cpuinfo())
-    self.PhotonsTable.AddText('Photons fit: t = {:.0f} s (CPU {:.0f} s)'.format(ROOT.gBenchmark.GetRealTime('PFit'), ROOT.gBenchmark.GetCpuTime('PFit')))
-    self.PhotonsTable.AddText('#chi^{2}/NDF = %.1f/%d | Prob = %.4f' % (chi2,NDF,prob))
-    self.PhotonsTable.AddText('X_{0} = %08.3f #pm %5.3f mm' % (X0, dX0))
-    self.PhotonsTable.AddText('#xi_{1} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(2), self.PXY.GetParError(2)))
-    self.PhotonsTable.AddText('#xi_{2} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(3), self.PXY.GetParError(3)))
-    self.PhotonsTable.AddText('#xi_{3}#zeta_{x} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(4), self.PXY.GetParError(4)))
-    self.PhotonsTable.AddText('#xi_{3}#zeta_{y} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(5), self.PXY.GetParError(5)))
-    self.PhotonsTable.AddText('#xi_{3}#zeta_{z} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(6), self.PXY.GetParError(6)))
-    self.PhotonsTable.AddText('#sigma_{x} = %5.1f #pm %4.1f um'      % (1000*self.PXY.GetParameter(7), 1000*self.PXY.GetParError(7)))
-    self.PhotonsTable.AddText('#sigma_{y} = %5.2f #pm %4.2f um'      % (1000*self.PXY.GetParameter(8), 1000*self.PXY.GetParError(8)))
-
 
   def ElectronsResults(self):
     chi2 = self.FitElectronsResult.Chi2(); print('Chi2: %f'        % (chi2))
@@ -170,6 +148,27 @@ class POLARIMETER:
     self.ElectronsTable.AddText('#sigma_{y} = %5.2f #pm %4.2f #mum' % (500*self.EXY.GetParameter(8)*B, 500*self.EXY.GetParError(8)*B))
     self.ElectronsTable.AddText('E_{beam} = %7.4f #pm %6.4f GeV. ' % (Eo*1.e-9, dEo*1.e-9))
 
+  def PhotonsResults(self):
+    chi2 = self.FitPhotonsResult.Chi2(); print('Chi2: %f'        % (chi2))
+    NDF  = self.FitPhotonsResult.Ndf();  print('NDF: %d'         % (NDF) )
+    prob = self.FitPhotonsResult.Prob(); print('Probability: %f' % (prob))
+    NDF -= self.pZeros;                  prob = ROOT.TMath.Prob(chi2, NDF)
+    X0   = self.PXY.GetParameter(0);     dX0  = self.PXY.GetParError(0) 
+    Y0   = self.PXY.GetParameter(1);     dY0  = self.PXY.GetParError(1)
+    self.PhotonsTable = ROOT.TPaveText(.05, .05, .95, .96)
+    self.PhotonsTable.AddText(cpuinfo())
+    self.PhotonsTable.AddText('Photons fit: t = {:.0f} s (CPU {:.0f} s)'.format(ROOT.gBenchmark.GetRealTime('PFit'), ROOT.gBenchmark.GetCpuTime('PFit')))
+    self.PhotonsTable.AddText('#chi^{2}/NDF = %.1f/%d | Prob = %.4f' % (chi2,NDF,prob))
+    self.PhotonsTable.AddText('X_{0} = %08.3f #pm %5.3f mm' % (X0, dX0))
+    self.PhotonsTable.AddText('#xi_{1} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(2), self.PXY.GetParError(2)))
+    self.PhotonsTable.AddText('#xi_{2} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(3), self.PXY.GetParError(3)))
+    self.PhotonsTable.AddText('#xi_{3}#zeta_{x} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(4), self.PXY.GetParError(4)))
+    self.PhotonsTable.AddText('#xi_{3}#zeta_{y} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(5), self.PXY.GetParError(5)))
+    self.PhotonsTable.AddText('#xi_{3}#zeta_{z} = %05.3f #pm %5.3f'  % (self.PXY.GetParameter(6), self.PXY.GetParError(6)))
+    self.PhotonsTable.AddText('#sigma_{x} = %5.1f #pm %4.1f um'      % (1000*self.PXY.GetParameter(7), 1000*self.PXY.GetParError(7)))
+    self.PhotonsTable.AddText('#sigma_{y} = %5.2f #pm %4.2f um'      % (1000*self.PXY.GetParameter(8), 1000*self.PXY.GetParError(8)))
+
+
 
 class DISPLAY:
   def __init__(self):
@@ -199,7 +198,7 @@ def main(argv):
   DATA.PhotonsResiduals()
   ROOT.gBenchmark.Stop('PFit')
   LOOK.ShowOnPad(nPad=4, entity = DATA.PXY, grid = True, goption='COLZ1')
-  LOOK.ShowOnPad(nPad=5, entity = DATA.DDp, grid = True, goption='COLZ1')
+  LOOK.ShowOnPad(nPad=5, entity = DATA.DDp, grid = True, goption='COLZ')
   if psuccess: 
     DATA.PhotonsResults()
     LOOK.ShowOnPad(nPad=6, entity = DATA.PhotonsTable)
@@ -212,10 +211,11 @@ def main(argv):
   ROOT.gBenchmark.Stop('EFit')
 
   LOOK.ShowOnPad(nPad=7, entity = DATA.EXY, grid = True, goption='COLZ1')
-  LOOK.ShowOnPad(nPad=8, entity = DATA.DDe, grid = True, goption='COLZ1')
+  LOOK.ShowOnPad(nPad=8, entity = DATA.DDe, grid = True, goption='COLZ')
   if psuccess and esuccess: 
     DATA.ElectronsResults()
     LOOK.ShowOnPad(nPad=9, entity = DATA.ElectronsTable)
+
   input()
   exit()
 

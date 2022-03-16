@@ -58,8 +58,8 @@ class Photons: # THIS IS THE CROSS SECTION FOR SCATTERED PHOTONS (dσ / dηx dη
 class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
   def __init__(self):
     self.iteration, self.position, self.compton, self.emittance = 0, [], [], []
-    self.xmid_n = np.zeros((PPD.X_npix), dtype=np.double)
-    self.ymid_n = np.zeros((PPD.Y_npix), dtype=np.double)
+    self.xmid_n = np.zeros(PPD.X_npix, dtype=np.double)
+    self.ymid_n = np.zeros(PPD.Y_npix, dtype=np.double)
     self.ibase  = 1.e-3*Spectrometer.γ/Spectrometer.leip_L # from mm to 1/γ
     self.XS     = Photons()
     self.Ax, self.Bx = 1/PPD.X_pix, - PPD.X_beam/PPD.X_pix
@@ -73,7 +73,7 @@ class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+
       self.position = X0, Y0 = position; change = True
       for xpix in range(PPD.X_npix): self.xmid_n[xpix] = self.ibase*(PPD.X_beam + (xpix+0.5)*PPD.X_pix - X0)
       for ypix in range(PPD.Y_npix): self.ymid_n[ypix] = self.ibase*(PPD.Y_beam + (ypix+0.5)*PPD.Y_pix - Y0)
-      self.XS.ηy, self.XS.ηx = np.meshgrid(self.ymid_n, self.xmid_n)
+      self.XS.ηy, self.XS.ηx = np.meshgrid(self.ymid_n, self.xmid_n, sparse=True)
       self.XS.Components()
     if (self.compton != compton) or change: # if Compton parameters changed
       self.compton = compton;            change = True
@@ -92,10 +92,10 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
   D          = 2*R/N                                        # distance between knots
   x          = np.linspace(D/2-R, R-D/2, num=N)             # knots positions in x
   y          = x.copy()                                     # knots positions in y
-  Y, X       = np.meshgrid(y, x)                            # knots grid in x and y
+  Y, X       = np.meshgrid(y, x, sparse=True)               # knots grid in x and y
   νx         = F_F_T.fftshift(F_F_T.fftfreq(N, d=D))        # FFT frequencies in x 
   νy         = νx.copy()                                    # FFT frequencies in y
-  νy, νx     = np.meshgrid(νy, νx)                          # FFT grid in νx and νy
+  νy, νx     = np.meshgrid(νy, νx, sparse=True)             # FFT grid in νx and νy
   ρ          = 2*π*(νx**2 + νy**2)**0.5 + np.finfo(float).tiny**0.5
   Hankel     = np.sin(ρ)/ρ                                  # numpy function sinc(x) = sin(πx)/(πx)
   emittance  = [None, None]                                 # σx, σy
@@ -122,14 +122,14 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
       self.stockspar = [ξ1, ζy, ζz]
       self.xst        = self.xso + ξ1*self.xs1 + ζy*self.xsy + ζz*self.xsz
       print('stockspar: ξ={:8.6f} ζy={:8.6f} ζz={:8.6f} '.format(ξ1, ζy, ζz))#, end = '')
-    self.BLUR      =  R_B_S(self.y, self.x, self.xst*self.cvl, kx=3, ky=3 )  # this is the RectBivariateSpline
+    self.SPLINE      =  R_B_S(self.y, self.x, self.xst*self.cvl, kx=3, ky=3, s = 0 )  # this is the RectBivariateSpline
 
 
 class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
   def __init__(self):
     self.iteration, self.ellipse, self.compton = 0, [], []
-    self.xmid_n      = np.zeros((EPD.X_npix), dtype=np.double)
-    self.ymid_n      = np.zeros((EPD.Y_npix), dtype=np.double)
+    self.xmid_n      = np.zeros(EPD.X_npix, dtype = np.double)
+    self.ymid_n      = np.zeros(EPD.Y_npix, dtype = np.double)
     self.XS          = Electrons()
     self.Ax, self.Bx = 1/EPD.X_pix, - EPD.X_beam/EPD.X_pix
     self.Ay, self.By = 1/EPD.Y_pix, - EPD.Y_beam/EPD.Y_pix
@@ -147,8 +147,8 @@ class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+
       for xpix in range(EPD.X_npix):  self.xmid_n[xpix] = RX*(CX + (xpix+0.5)*EPD.X_pix)
       for ypix in range(EPD.Y_npix):  self.ymid_n[ypix] = RY*(CY + (ypix+0.5)*EPD.Y_pix)
     if change:
-      self.SPLINE = self.XS.BLUR(self.xmid_n, self.ymid_n)
+      self.BLUR = self.XS.SPLINE(self.xmid_n, self.ymid_n)
       self.iteration += 1;   print('iteration: %d ' % (self.iteration))
-    return p[9]*self.SPLINE[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
+    return p[9]*self.BLUR[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
 
 
