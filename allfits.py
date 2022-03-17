@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, ROOT
+import sys, ROOT, argparse
 from hardware import Constants, Laser, EPD, PPD
 from xSection import pPIXELS, ePIXELS
 
@@ -12,14 +12,16 @@ def cpuinfo():
 
 class POLARIMETER:
   DataMC = {}
-  def __init__(self):
+  def __init__(self, filename=None):
     beam  = {
             'test'               :'Tue Feb 22 16:45:20 2022.root',
+            'mpol'               :'Wed Mar 16 13:55:28 2022.root',
+            'polm'               :'Wed Mar 16 14:20:16 2022.root',
             }
-#    XYD   = ROOT.TList()
-    hfile = ROOT.TFile(beam['test'])
+    if filename: hfile = ROOT.TFile(filename)
+    else:        hfile = ROOT.TFile(beam['test'])
     name  = hfile.GetListOfKeys()[0].GetName()
-    XYD   = hfile.Get(name)
+    XYD   = hfile.Get(name) #    XYD   = ROOT.TList()
     hfile.Close()
     for i in range(11): self.DataMC[['λo','Eo','κ','γ','θo','ξ1','ξ2','ξ3','ζx','ζy','ζz'][i]] = [float(p) for p in name.split()][i]
     self.HDp, self.DDp = XYD[0], XYD[0].Clone()
@@ -85,7 +87,7 @@ class POLARIMETER:
     self.PXY.SetTitle('Photons: Fit'); self.PXY.GetXaxis().SetTitle('X, mm')
 
   def FitPhotons(self):
-    fixed_parameters = [  ]
+    fixed_parameters = []
     for p in fixed_parameters: self.PXY.FixParameter(p, self.PXY.GetParameter(p))
     self.FitPhotonsResult =  self.HDp.Fit(self.PXY, 'SVNP') # Use Pearsons chi-square method
     for p in fixed_parameters: self.PXY.ReleaseParameter(p)
@@ -184,7 +186,12 @@ class DISPLAY:
 
 
 def main(argv):
-  DATA = POLARIMETER()
+  parser = argparse.ArgumentParser(description='Process cli arguments.')
+  parser.add_argument('--fit', action='store_const', const=True, default=False, help = 'Fit the data. Default is NO.')
+  parser.add_argument('filename', type=str, help='Name of the datafile.')
+  args = parser.parse_args()
+
+  DATA = POLARIMETER(filename=args.filename)
   LOOK = DISPLAY()
   DATA.ParametersMC()
   LOOK.ShowOnPad(nPad=1, entity = DATA.HDp, grid = True, goption='COLZ')
@@ -193,25 +200,25 @@ def main(argv):
 
   ROOT.gBenchmark.Start('PFit')
   DATA.PhotonsSetFunction()
-  if len(argv)==1:      psuccess = DATA.FitPhotons()
-  else:                 psuccess = False
+  if args.fit:  psuccess = DATA.FitPhotons()
+  else:         psuccess = False
   DATA.PhotonsResiduals()
   ROOT.gBenchmark.Stop('PFit')
   LOOK.ShowOnPad(nPad=4, entity = DATA.PXY, grid = True, goption='COLZ1')
-  LOOK.ShowOnPad(nPad=5, entity = DATA.DDp, grid = True, goption='COLZ')
+  LOOK.ShowOnPad(nPad=5, entity = DATA.DDp, grid = True, goption='COLZ1')
   if psuccess: 
     DATA.PhotonsResults()
     LOOK.ShowOnPad(nPad=6, entity = DATA.PhotonsTable)
 
   ROOT.gBenchmark.Start('EFit')
   DATA.ElectronsSetFunction()
-  if len(argv)==1:      esuccess = DATA.FitElectrons()
-  else:                 esuccess = False
+  if args.fit:  esuccess = DATA.FitElectrons()
+  else:         esuccess = False
   DATA.ElectronsResiduals()
   ROOT.gBenchmark.Stop('EFit')
 
   LOOK.ShowOnPad(nPad=7, entity = DATA.EXY, grid = True, goption='COLZ1')
-  LOOK.ShowOnPad(nPad=8, entity = DATA.DDe, grid = True, goption='COLZ')
+  LOOK.ShowOnPad(nPad=8, entity = DATA.DDe, grid = True, goption='COLZ1')
   if psuccess and esuccess: 
     DATA.ElectronsResults()
     LOOK.ShowOnPad(nPad=9, entity = DATA.ElectronsTable)

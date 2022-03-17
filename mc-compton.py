@@ -92,7 +92,7 @@ def main(argv):
     T+= ' %6.3f %6.3f %6.3f' % (Laser.ξ1, Laser.ξ2, Laser.ξ3)
     T+= ' %6.3f %6.3f %6.3f' % (    S.ζx,     S.ζy,     S.ζz)
     XYD = ROOT.TList(); XYD.Add(XYp); XYD.Add(XYe)
-    fname = asctime()+'.root'
+    fname = asctime().replace(' ','_').replace(':','') + '.root'
     f = ROOT.TFile(fname,'new'); f.WriteObject(XYD, T); f.Close()
     print ('Data saved to ' + fname)
 

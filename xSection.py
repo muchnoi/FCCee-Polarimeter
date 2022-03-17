@@ -44,9 +44,9 @@ class Photons: # THIS IS THE CROSS SECTION FOR SCATTERED PHOTONS (dσ / dηx dη
     self.xs[0] = 2 *idn3*uoκ2*(1+u1**2-4*u1*uoκ*(1-uoκ)) # unpolarized xSection
     self.xs[1] = 8 *idn2*uoκ4 *(self.ηx**2 - self.ηy**2) # vert/hor linear laser polarization ξ1
     self.xs[2] = 16*idn2*uoκ4 * self.ηx    * self.ηy     # diagonal linear laser polarization ξ2
-    self.xs[3] = -4*idn3*uoκ4 * self.ηx                  # transverse horizontal electron polarization
-    self.xs[4] = -4*idn3*uoκ4 * self.ηy                  # transverse vertical electron polarization
-    self.xs[5] = 2 *idn3*uoκ3 * (u + 2)*(1-2*uoκ)        # longitudinal electron polarization
+    self.xs[3] = -4*idn3*uoκ3 * u * self.ηx              # transverse horizontal electron polarization
+    self.xs[4] = -4*idn3*uoκ3 * u * self.ηy              # transverse vertical electron polarization
+    self.xs[5] =  2*idn3*uoκ3*(u+2)*(Spectrometer.κ-2*u) # longitudinal electron polarization
 
   def Total(self, parameters):
     ξ1, ξ2, ζx, ζy, ζz = parameters
@@ -109,7 +109,7 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
     self.xso = idn*(1 + u1**2 - u1*(1-self.X**2))           # unpolarized xSection
     self.xs1 = idn*(1 - self.X**2 - 2*self.Y**2)*u1         # vert/hor linear laser polarization ξ1
     self.xsy = idn*u*self.Y                                 # transverse vertical electron polarization
-    self.xsz = idn*u*(u + 2)*self.X                         # longitudinal electron polarization
+    self.xsz = -idn*u*(u + 2)*self.X                        # longitudinal electron polarization
 
   def Prepare(self, parameters):
     ξ1, ζy, ζz, σx, σy = parameters
