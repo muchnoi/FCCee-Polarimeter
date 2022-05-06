@@ -2,10 +2,10 @@
 # Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω
 # α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω
 
-import ROOT, sys
+import ROOT, sys, pickle
 from ctypes import c_double
 from time import asctime
-from hardware import EPD, PPD, Laser, Spectrometer
+from hardware import EPD, PPD, Laser, Spectrometer as Sptr
 from xSection import XSMC
 
 class MonteCarlo(XSMC):
@@ -18,32 +18,40 @@ class MonteCarlo(XSMC):
     self.x, self.y = cDouble(), cDouble()
 
   def game(self):
-    self.U.GetRandom2(self.u, self.φ)        # Get u,φ
-    self.rannor(      self.x, self.y)        # Get x,y from normal distribution
-    θex = self.x[0] * Spectrometer.nsx       # electron betatron x-angle [1/γ]
-    θey = self.y[0] * Spectrometer.nsy       # electron betatron y-angle [1/γ]
-    sin = ROOT.TMath.Sin(self.φ[0])
-    cos = ROOT.TMath.Cos(self.φ[0])
-    θp  = (Spectrometer.κ/self.u[0]-1)**0.5  # photon   scattering angle [1/γ]
-    θe  = θp * self.u[0]                     # electron scattering angle [1/γ]
-    θpx = θex + θp*cos                       # photon            x-angle [1/γ]
-    θpy = θey + θp*sin                       # photon            y-angle [1/γ]
-    θex = θex - θe*cos                       # electron          x-angle [1/γ]
-    θey = θey - θe*sin                       # electron          y-angle [1/γ]
-    return self.u[0], θpx, θpy, θex, θey
+    self.U.GetRandom2(self.u, self.φ)         # get u,φ
+    Δ    = ROOT.gRandom.Gaus(0.0, Sptr.σE)    # electron energy deviation [a.u.]
+    x    = Δ*Sptr.Dx                          # synchrotron x-coordinate [mm]
+    self.rannor(      self.x, self.y)         # get x,y from normal distribution
+    x   += self.x[0] * Sptr.σx                # electron betatron x-coordinate [mm]
+    y    = self.y[0] * Sptr.σy                # electron betatron y-coordinate [mm]
+    self.rannor(      self.x, self.y)         # Get x,y from normal distribution
+    θex  = self.x[0] * Sptr.ηx                # electron betatron x-angle [rad]
+    θey  = self.y[0] * Sptr.ηy                # electron betatron y-angle [rad]
+    sin  = ROOT.TMath.Sin(self.φ[0])
+    cos  = ROOT.TMath.Cos(self.φ[0])
+    θp   = (Sptr.κ/self.u[0]-1)**0.5/Sptr.γ   # photon   scattering   angle [rad]
+    θpx  = θex + θp*cos/(1+Δ)                 # photon   scattering x-angle [rad]
+    θpy  = θey + θp*sin/(1+Δ)                 # photon   scattering y-angle [rad]
+    θe   = θp * self.u[0]                     # electron scattering   angle [rad]
+    θex  = θex - θe*cos                       # electron scattering x-angle [rad]
+    θey  = θey - θe*sin                       # electron scattering y-angle [rad]
+    θbn  = Sptr.θo*(self.u[0]-Δ/(1+Δ))        # electron   bending    angle [rad]
+    return x, y, θpx, θpy, θex, θey, θbn
 
 
 def main(argv):
-  S      = Spectrometer()
+  S      = Sptr()
   print('Laser ωo:                %.3f eV'   % (Laser.ωo))
   print('Comptony κ-parameter:    %.3f'      % (S.κ))
   print('beam γ-factor:           %.3f'      % (S.γ))
-  print('beam bending angle:      %.3f mrad' % (1000*S.bend))
-  print('beam bending angle:      %.3f 1/γ'  % (S.no))
-  print('γ-to-beam distance :     %.3f mm'   % (1000   * S.bend*S.spec_L))
-  print('emin-to-beam distance :  %.3f mm'   % (1000*S.κ*S.bend*S.spec_L))
-  print('horizontal spread:       %.3f mm'   % (1000      *S.sx*S.leip_L))
-  print('vertical spread:         %.3f mm'   % (1000      *S.sy*S.leip_L))
+  print('beam bending angle:      %.3f mrad' % (1000*S.θo))
+  print('beam bending angle:      %.3f 1/γ'  % (S.γ*S.θo))
+  print('γ-to-beam distance :     %.3f mm'   % (1000    *S.θo*S.spec_L))
+  print('emin-to-beam distance :  %.3f mm'   % (1000*S.κ*S.θo*S.spec_L))
+  print('horizontal size:         %.3f mm'   % (S.σx))
+  print('vertical size:           %.3f mm'   % (S.σy))
+  print('horizontal spread add:   %.3f mm'   % (1000*S.ηx*S.leip_L))
+  print('vertical spread add:     %.3f mm'   % (1000*S.ηy*S.leip_L))
   input('Continue, OK?')
 
   Xemin, Xemax = EPD.X_beam, EPD.X_beam + EPD.X_size
@@ -64,13 +72,15 @@ def main(argv):
   cv = ROOT.TCanvas('cv','cv',0,0,1600,1200)
   cv.Divide(2,2)
   for p in range(4): cv.GetPad(p+1).SetGrid()
-  netomm = 1000*S.leip_L/S.γ # scattering angle in 1/γ to mm
-  notomm = 1000*S.spec_L/S.γ #    bending angle in 1/γ to mm
+  L1     = 1000*S.leip_L     # scattering base [mm]
+  L2     = 1000*S.spec_L     #    bending base [mm]
   for i in range(100):
     for j in range(100000):
-      u, txp, typ, txe, tye = G.game()
-      xe, ye = netomm*txe + u*notomm*S.no, netomm*tye
-      xp, yp = netomm*txp -   notomm*S.no, netomm*typ
+      x, y, θpx, θpy, θex, θey, θbn = G.game()
+      xp = x + L1*θpx - L2*S.θo
+      yp = y + L1*θpy
+      xe = x + L1*θex + L2*θbn
+      ye = y + L1*θey
       if xe > EPD.X_beam:
         XYe.Fill(xe,ye); Ye.Fill(ye)
       if Xpmin < xp < Xpmax and Ypmin < yp < Ypmax:
@@ -82,20 +92,12 @@ def main(argv):
     sys.stdout.flush()
   print()
 
-  mean, rms, N = Yp.GetMean(), Yp.GetRMS(), Yp.Integral()
-  print(mean, rms, N)
-  print('Accuracy: %f percent' % (100*rms/mean/N**0.5))
-
-  q = input('Save data? (Yes/no)')
-  if not 'n' in q:
-    T = '%.3e %.3e %.6f %.3e %.3f' % (Laser.λo, S.Eo, S.κ, S.γ, S.no)
-    T+= ' %6.3f %6.3f %6.3f' % (Laser.ξ1, Laser.ξ2, Laser.ξ3)
-    T+= ' %6.3f %6.3f %6.3f' % (    S.ζx,     S.ζy,     S.ζz)
-    XYD = ROOT.TList(); XYD.Add(XYp); XYD.Add(XYe)
-    fname = asctime().replace(' ','_').replace(':','') + '.root'
-    f = ROOT.TFile(fname,'new'); f.WriteObject(XYD, T); f.Close()
-    print ('Data saved to ' + fname)
-
+  if not ('n' or 'N') in input('Save data? (Yes/no)'):
+    SAVE = {};         SAVE['Laser'] = Laser;       SAVE['Spectrometer'] = Sptr
+    SAVE['EPD'] = EPD; SAVE['PPD'] = PPD; SAVE['XYe'] = XYe; SAVE['XYp'] = XYp
+    fname = asctime().replace(' ','_').replace(':','') + '.MC'
+    with open(fname, 'wb') as fp:  pickle.dump(SAVE, fp, -1)
+    print('Data saved to %s' % fname)
   exit(0)
 
 

@@ -10,33 +10,34 @@ class Constants:
 class Laser:
   λo     = 0.532e-4                    # λo, cm
   ωo     = Constants.hc/λo             # ωo, eV
-  ξ1     = 0.1                        # laser linear polarization horizontal (ξ1=1) or vertical ξ1=-1
-  ξ2     = 0.1                        # laser linear polarization (φ=π/4 ξ2=1) or vertical (φ=-π/4 ξ2=-1)
+  ξ1     = 0.00                        # laser linear polarization horizontal (ξ1=1) or vertical ξ1=-1
+  ξ2     = 0.0                         # laser linear polarization (φ=π/4 ξ2=1) or vertical (φ=-π/4 ξ2=-1)
   ξ3     = (1 - ξ1**2 - ξ2**2)**0.5    # laser circular polarization degree ξ3 [-1:1]
 
 class Spectrometer:
   Eo     = 45.6e+9                     # electron (beam) energy, eV
+  σE     = 1.e-3                       # beam energy spread, a.u.
+  Dx     = 0.0                         # horizontal dispersion at i.p., mm
   γ      = Eo/Constants.me             # electron Lorentz factor
   κ      = 4*γ*Laser.ωo/Constants.me   # 2 * rest frame momentum of laser photon
-  bend   = .0021341                    # bending angle, rad
+  θo     = .0021341                    # bending angle, rad
   bend_l = 24.12                       # dipole length, m
   spec_L = 0.5*bend_l + 88.0           # spectrometer arc length, m
   leip_L = 0.5*bend_l + spec_L + 5.0   # laser electron i.p. distance, m
-  no     = γ*bend                      # bending angle in units 1/γ
-  ex     = 0.27e-9                     # emittance x, m*rad
-  ey     = 1.0e-12                     # emittance y, m*rad
-  Bx     = 100.0                       # βx, m
-  By     = 25.00                       # βy, m
-  sx     = (ex/Bx)**0.5                # betatron angular spread in x, rad
-  sy     = (ey/By)**0.5                # betatron angular spread in y, rad
-  nsx    = γ*sx                        # betatron angular spread in x, 1/γ
-  nsy    = γ*sy                        # betatron angular spread in y, 1/γ
-  ζx     = 0.2                         # transverse electron spin polariztion along x
-  ζy     = 0.2                         # transverse electron spin polariztion along y
-  ζz     = 0.2                         # longitudinal electron spin polariztion along z
+  εx     = 0.27e-9                     # emittance x, m*rad
+  εy     = 1.0e-12                     # emittance y, m*rad
+  βx     = 100.0                       # βx, m
+  βy     = 25.00                       # βy, m
+  σx     = 1000*(εx*βx)**0.5           # betatron size in x, mm
+  σy     = 1000*(εy*βy)**0.5           # betatron size in y, mm
+  ηx     = (εx/βx)**0.5                # betatron angular spread in x, rad
+  ηy     = (εy/βy)**0.5                # betatron angular spread in y, rad
+  ζx     = 0.0                         # transverse electron spin polariztion along x
+  ζy     = 0.0                         # transverse electron spin polariztion along y
+  ζz     = 0.0                         # longitudinal electron spin polariztion along z
 
 class EPD:                             # Electron Pixel Detector
-  X_beam = 40.0                        # beam-detector horizontal space, mm
+  X_beam = -2.0                        # beam-detector horizontal space, mm
   Y_beam = -2.0                        # beam-detector  vertical  space, mm
   X_size = 400.0                       # detector X-size (horizontal)  , mm
   Y_size = 4.0                         # detector Y-size   (vertical)  , mm
