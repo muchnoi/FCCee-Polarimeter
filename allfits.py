@@ -27,7 +27,7 @@ class POLARIMETER:
     self.HDp.SetStats(0); self.HDp.SetTitle('Photons: MC')
     self.DDe.SetStats(0); self.DDe.SetTitle('Electrons: residuald')
     self.DDp.SetStats(0); self.DDp.SetTitle('Photons: residuals')
-    
+
   def ParametersMC(self):
     self.ParametersTable = ROOT.TPaveText(.05, .05, .95, .96)
     self.ParametersTable.AddText('Monte-Carlo Parameters:')
@@ -45,24 +45,24 @@ class POLARIMETER:
     self.efit = ePIXELS(EPD = self.MC['EPD'], setup = self.MC['Spectrometer'])
     X0 = self.MC['EPD'].X_beam; X1 = X0 + self.MC['EPD'].X_size
     Y0 = self.MC['EPD'].Y_beam; Y1 = Y0 + self.MC['EPD'].Y_size
+    self.EXY = ROOT.TF2('EXY', self.efit , X0, X1, Y0, Y1, 12)
     ξ1 = self.MC['Laser'].ξ1
-    ξ2 = self.MC['Laser'].ξ2
+    ξ2 = 1#self.MC['Laser'].ξ2
     ζx = self.MC['Laser'].ξ3 * self.MC['Spectrometer'].ζx
     ζy = self.MC['Laser'].ξ3 * self.MC['Spectrometer'].ζy
     ζz = self.MC['Laser'].ξ3 * self.MC['Spectrometer'].ζz
-    self.EXY = ROOT.TF2('EXY', self.efit , X0, X1, Y0, Y1, 12)
-    self.EXY.SetParName(0,  'X1');      self.EXY.SetParameter(0,   -0.15)  # beam position x, mm
-    self.EXY.SetParName(1,  'X2');      self.EXY.SetParameter(1,   347.75)  # edge position x, mm
+    self.EXY.SetParName(0,  'X1');      self.EXY.SetParameter(0,   0.0)    # beam position x, mm
+    self.EXY.SetParName(1,  'X2');      self.EXY.SetParameter(1,   347.75) # edge position x, mm
     self.EXY.SetParName(2,  'Y0');      self.EXY.SetParameter(2,  -1.068)  # y_min, mm
     self.EXY.SetParName(3,  'Y1');      self.EXY.SetParameter(3,   1.068)  # y_max, mm
-    self.EXY.SetParName(4,  'ξ1');      self.EXY.SetParameter(4,      ξ1); #self.EXY.SetParLimits(4,  -1.0, 1.0)
-    self.EXY.SetParName(5,  'ξ2');      self.EXY.SetParameter(5,      ξ2); #self.EXY.SetParLimits(5,  -1.0, 1.0)
-    self.EXY.SetParName(6,  'ξ3*ζx');   self.EXY.SetParameter(6,      ζx); #self.EXY.SetParLimits(6,  -1.0, 1.0)
-    self.EXY.SetParName(7,  'ξ3*ζy');   self.EXY.SetParameter(7,      ζy); #self.EXY.SetParLimits(7,  -1.0, 1.0)
-    self.EXY.SetParName(8,  'ξ3*ζz');   self.EXY.SetParameter(8,      ζz); #self.EXY.SetParLimits(8,  -1.0, 1.0)
-    self.EXY.SetParName(9,  'σx');      self.EXY.SetParameter(9,  1.2e-3); self.EXY.SetParLimits( 9, 0.0001, 0.1) # σ_x [a.u.]
-    self.EXY.SetParName(10, 'σy');      self.EXY.SetParameter(10, 2.6e-2); self.EXY.SetParLimits(10, 0.0001, 0.1) # σ_y [a.u.]
-    self.EXY.SetParName(11, 'norm');    self.EXY.SetParameter(11, 100.0)  # amplitude
+    self.EXY.SetParName(4,  'ξ1');      self.EXY.SetParameter(4,      ξ1); self.EXY.SetParLimits(4,  -1.0, 1.0)
+    self.EXY.SetParName(5,  'ξ2');      self.EXY.SetParameter(5,      ξ2); self.EXY.SetParLimits(5,  -1.0, 1.0)
+    self.EXY.SetParName(6,  'ξ3*ζx');   self.EXY.SetParameter(6,      ζx); self.EXY.SetParLimits(6,  -1.0, 1.0)
+    self.EXY.SetParName(7,  'ξ3*ζy');   self.EXY.SetParameter(7,      ζy); self.EXY.SetParLimits(7,  -1.0, 1.0)
+    self.EXY.SetParName(8,  'ξ3*ζz');   self.EXY.SetParameter(8,      ζz); self.EXY.SetParLimits(8,  -1.0, 1.0)
+    self.EXY.SetParName(9,  'σx');      self.EXY.SetParameter(9,  0.375);  self.EXY.SetParLimits( 9, 0.01, 1.0) # σ_x [mm]
+    self.EXY.SetParName(10, 'σy');      self.EXY.SetParameter(10, 0.025);   self.EXY.SetParLimits(10, 0.01, 1.0) # σ_y [mm]
+    self.EXY.SetParName(11, 'norm');    self.EXY.SetParameter(11, 1.5e+3); self.EXY.SetParLimits(11, 1e+2, 1e+5) # amplitude
     self.EXY.SetNpx(self.MC['EPD'].X_npix)
     self.EXY.SetNpy(self.MC['EPD'].Y_npix)
     self.EXY.SetTitle('Electrons: Fit'); self.EXY.GetXaxis().SetTitle('X, mm')
@@ -91,8 +91,8 @@ class POLARIMETER:
     self.PXY.SetParName(4, 'ξ3*ζx');   self.PXY.SetParameter(4,     ζx); self.PXY.SetParLimits(4,  -1.1, 1.1)
     self.PXY.SetParName(5, 'ξ3*ζy');   self.PXY.SetParameter(5,     ζy); self.PXY.SetParLimits(5,  -1.1, 1.1)
     self.PXY.SetParName(6, 'ξ3*ζz');   self.PXY.SetParameter(6,     ζz); self.PXY.SetParLimits(6,  -1.1, 1.1)
-    self.PXY.SetParName(7, 'σx');      self.PXY.SetParameter(7,    0.2); self.PXY.SetParLimits(7, 0.001, 1.0) # σ_x [mm]
-    self.PXY.SetParName(8, 'σy');      self.PXY.SetParameter(8,   0.05); self.PXY.SetParLimits(8, 0.001, 1.0) # σ_y [mm]
+    self.PXY.SetParName(7, 'σx');      self.PXY.SetParameter(7,    0.2); self.PXY.SetParLimits(7, 0.01, 1.0) # σ_x [mm]
+    self.PXY.SetParName(8, 'σy');      self.PXY.SetParameter(8,   0.05); self.PXY.SetParLimits(8, 0.01, 1.0) # σ_y [mm]
     self.PXY.SetParName(9,' norm');    self.PXY.SetParameter(9,   9e+3)  # amplitude
     self.PXY.SetNpx(self.MC['PPD'].X_npix)
     self.PXY.SetNpy(self.MC['PPD'].Y_npix)
@@ -111,9 +111,9 @@ class POLARIMETER:
     for binx   in range(1, self.MC['EPD'].X_npix+1):
       for biny in range(1, self.MC['EPD'].Y_npix+1):
         H = self.DDe.GetBinContent(binx, biny)
-        if H:
+        if H: 
           F = self.EXY.Eval(self.MC['EPD'].X_beam + (binx-0.5)*self.MC['EPD'].X_pix, self.MC['EPD'].Y_beam + (biny-0.5)*self.MC['EPD'].Y_pix)
-          self.DDe.SetBinContent(binx, biny, (F - H)/(1+abs(F))**0.5)
+          self.DDe.SetBinContent(binx, biny, (F - H)/(1+F)**0.5)
         else: self.eZeros += 1
     print ('NeZero=', self.eZeros)
     self.DDe.SetTitle('Electrons: (Fit - MC)/(1+Fit)^{1/2}')
@@ -130,15 +130,18 @@ class POLARIMETER:
     self.DDp.SetTitle('Photons: (Fit - MC)/(1+Fit)^{1/2}')
 
   def ElectronsResults(self):
+    RE = 0.25e-9*Constants.me**2/self.MC['Laser'].ωo
     X0 = 1000*self.MC['Spectrometer'].θo*self.MC['Spectrometer'].spec_L
     X2 = X0*self.MC['Spectrometer'].κ
-    print ('expectation: X0 = {:7.5f} mm'.format(-X0))
-    print ('expectation: X2 = {:7.5f} mm'.format(X2))
+    print ('expectation: X0 = {:7.5f}  mm'.format(-X0))
+    print ('expectation: X2 = {:7.5f}  mm'.format(X2))
+    print ('expectation: Eo = {:7.4f} GeV'.format(RE*X2/X0))
 
-    chi2 = self.FitElectronsResult.Chi2(); print('Chi2: %f'        % (chi2))
-    NDF  = self.FitElectronsResult.Ndf();  print('NDF: %d'         % (NDF) )
-    prob = self.FitElectronsResult.Prob(); print('Probability: %f' % (prob))
+    chi2 = self.FitElectronsResult.Chi2()
+    NDF  = self.FitElectronsResult.Ndf() ; prob = self.FitElectronsResult.Prob()
+    print('χ² = {:9.1f}, NDF = {:7d}, p-value:{:7.5f}'.format(chi2, NDF, prob))
     NDF -= self.eZeros;                    prob = ROOT.TMath.Prob(chi2, NDF)
+    print('χ² = {:9.1f}, NDF = {:7d}, p-value:{:7.5f}'.format(chi2, NDF, prob))
     X0   = self.PXY.GetParameter(0);       dX0  = self.PXY.GetParError(0) 
 #    X0   = self.HDp.GetMean(1);            dX0 = self.HDp.GetMeanError(1)
     X1   = self.EXY.GetParameter(0);       dX1 = self.EXY.GetParError(0) 
@@ -153,29 +156,30 @@ class POLARIMETER:
     Δ    = 250.*self.MC['Spectrometer'].κ/self.MC['Spectrometer'].θo/self.MC['Spectrometer'].γ**2*self.MC['Spectrometer'].leip_L # mm
     print ('Δ = {:7.5f} mm'.format(Δ))
     print ('Beam X = {:7.5f} ± {:7.5f} mm'.format(X1+Δ, dX1))
-    R    = (X2-X1-2*Δ)/(X1-X0+Δ)
+#    R    = (X2-X1-2*Δ)/(X1-X0+Δ)
+    R    = (X2-X1)/(X1-X0)
     dR   = R * ( (dX0/(X1-X0))**2 + (dX1*(X0-X2)/(X1-X0)/(X2-X1))**2 + (dX2/(X2-X1))**2 )**0.5
-    Eo   = 0.25*Constants.me**2/self.MC['Laser'].ωo * R
-    dEo  = 0.25*Constants.me**2/self.MC['Laser'].ωo * dR
+    Eo   = RE * R
+    dEo  = RE * dR
     print(R,  dR)
-    print('E = %.5f +/- %.5f GeV' % (Eo*1.e-9, dEo*1.e-9))
-    print('Y1 = %.5f +/- %.5f mm' % (Y1, dY1))
-    print('Y2 = %.5f +/- %.5f mm' % (Y2, dY2))
+    print('Eo = %.5f +/- %.5f GeV' % (Eo, dEo))
+    print('Y1 = %.5f +/- %.5f  mm' % (Y1, dY1))
+    print('Y2 = %.5f +/- %.5f  mm' % (Y2, dY2))
     print(0.25e-3*(Y2-Y1)/self.MC['Spectrometer'].leip_L*Constants.me/self.MC['Laser'].ωo)
     self.ElectronsTable = ROOT.TPaveText(.05, .05, .95, .96)
     self.ElectronsTable.AddText(cpuinfo())
     self.ElectronsTable.AddText('Electrons fit: t = {:.0f} s (CPU {:.0f} s)'.format(ROOT.gBenchmark.GetRealTime('EFit'), ROOT.gBenchmark.GetCpuTime('EFit')))
     self.ElectronsTable.AddText('#chi^{2}/NDF = %.1f/%d | Prob = %.4f' % (chi2,NDF,prob))
-    self.ElectronsTable.AddText('X_{1} = %08.3f #pm %5.3f mm' % (X1, dX1))
-    self.ElectronsTable.AddText('X_{2} = %08.3f #pm %5.3f mm' % (X2, dX2))
+    self.ElectronsTable.AddText('X_{1} = %7.4f #pm %5.3f mm' % (X1, dX1))
+    self.ElectronsTable.AddText('X_{2} = %7.3f #pm %5.3f mm' % (X2, dX2))
     self.ElectronsTable.AddText('#xi_{1} = %05.3f #pm %5.3f'  % (self.EXY.GetParameter(4), self.EXY.GetParError(4)))
     self.ElectronsTable.AddText('#xi_{2} = %05.3f #pm %5.3f'  % (self.EXY.GetParameter(5), self.EXY.GetParError(5)))
     self.ElectronsTable.AddText('#xi_{3}#zeta_{x} = %05.3f #pm %5.3f' % (self.EXY.GetParameter(6), self.EXY.GetParError(6)))
     self.ElectronsTable.AddText('#xi_{3}#zeta_{y} = %05.3f #pm %5.3f' % (self.EXY.GetParameter(7), self.EXY.GetParError(7)))
     self.ElectronsTable.AddText('#xi_{3}#zeta_{z} = %05.3f #pm %5.3f' % (self.EXY.GetParameter(8), self.EXY.GetParError(8)))
-    self.ElectronsTable.AddText('#sigma_{x} = %5.1f #pm %4.1f #mum' % (500*self.EXY.GetParameter(9)*A, 500*self.EXY.GetParError(9)*A))
-    self.ElectronsTable.AddText('#sigma_{y} = %5.2f #pm %4.2f #mum' % (500*self.EXY.GetParameter(10)*B, 500*self.EXY.GetParError(10)*B))
-    self.ElectronsTable.AddText('E_{beam} = %7.4f #pm %6.4f GeV. ' % (Eo*1.e-9, dEo*1.e-9))
+    self.ElectronsTable.AddText('#sigma_{x} = %5.1f #pm %4.1f #mum' % (1000*self.EXY.GetParameter(9 ), 1000*self.EXY.GetParError(9)))
+    self.ElectronsTable.AddText('#sigma_{y} = %5.2f #pm %4.2f #mum' % (1000*self.EXY.GetParameter(10), 1000*self.EXY.GetParError(10)))
+    self.ElectronsTable.AddText('E_{beam} = %7.4f #pm %6.4f GeV. ' % (Eo, dEo))
 
   def PhotonsResults(self):
     chi2 = self.FitPhotonsResult.Chi2(); print('Chi2: %f'        % (chi2))
@@ -243,7 +247,7 @@ def main(argv):
   DATA.ElectronsResiduals()
   ROOT.gBenchmark.Stop('EFit')
 
-  LOOK.ShowOnPad(nPad=7, entity = DATA.EXY, grid = True, goption='COLZ')
+  LOOK.ShowOnPad(nPad=7, entity = DATA.EXY, grid = True, goption='COLZ1')
   LOOK.ShowOnPad(nPad=8, entity = DATA.DDe, grid = True, goption='COLZ1')
   if psuccess and esuccess: 
     DATA.ElectronsResults()

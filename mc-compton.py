@@ -35,8 +35,8 @@ class MonteCarlo(XSMC):
     θe   = θp * self.u[0]                     # electron scattering   angle [rad]
     θex  = θex - θe*cos                       # electron scattering x-angle [rad]
     θey  = θey - θe*sin                       # electron scattering y-angle [rad]
-    θbn  = Sptr.θo*(self.u[0]-Δ/(1+Δ))        # electron   bending    angle [rad]
-    return x, y, θpx, θpy, θex, θey, θbn
+    uθo  = Sptr.θo*(self.u[0] - Δ/(1+Δ))      # electron   bending    angle [rad]
+    return x, y, θpx, θpy, θex, θey, uθo
 
 
 def main(argv):
@@ -76,10 +76,10 @@ def main(argv):
   L2     = 1000*S.spec_L     #    bending base [mm]
   for i in range(100):
     for j in range(100000):
-      x, y, θpx, θpy, θex, θey, θbn = G.game()
+      x, y, θpx, θpy, θex, θey, uθo = G.game()
       xp = x + L1*θpx - L2*S.θo
       yp = y + L1*θpy
-      xe = x + L1*θex + L2*θbn
+      xe = x + L1*θex + L2*uθo
       ye = y + L1*θey
       if xe > EPD.X_beam:
         XYe.Fill(xe,ye); Ye.Fill(ye)

@@ -37,7 +37,7 @@ class Spectrometer:
   ζz     = 0.0                         # longitudinal electron spin polariztion along z
 
 class EPD:                             # Electron Pixel Detector
-  X_beam = -2.0                        # beam-detector horizontal space, mm
+  X_beam = -2.1                        # beam-detector horizontal space, mm
   Y_beam = -2.0                        # beam-detector  vertical  space, mm
   X_size = 400.0                       # detector X-size (horizontal)  , mm
   Y_size = 4.0                         # detector Y-size   (vertical)  , mm

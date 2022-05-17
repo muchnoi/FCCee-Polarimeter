@@ -4,6 +4,7 @@ import numpy as np; π = np.pi
 from scipy             import fft                 as F_F_T
 from scipy.interpolate import RectBivariateSpline as R_B_S
 from scipy.ndimage     import gaussian_filter     as GAUSS
+#from scipy.ndimage     import fourier_gaussian    as GAUSS
 
 
 class XSMC: # DIFFERENTIAL CROSS SECTIONS FOR MONTE-CARLO (dσ / du dφ) +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -83,7 +84,7 @@ class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+
       self.XS.Total(compton)
     if (self.emittance != emittance) or change:  # if emittance parameters changed
       self.emittance = emittance
-      self.convolution         = GAUSS(self.XS.xst, sigma = emittance, mode='reflect', truncate=5.0)
+      self.convolution         = GAUSS(self.XS.xst, sigma = emittance, truncate=5.0)
 #      print('emittance: σx={:8.6f} σy={:8.6f} '.format(emittance[0],emittance[1]))#, end = '')
       self.iteration += 1;
       if np.random.rand()<0.05:  print('iteration: %d ' % (self.iteration))
@@ -91,123 +92,95 @@ class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+
 
 
 class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx dy) +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
-  Rx, Ry     = 1.1,     1.2
-  Nx, Ny     = 2048,    512
-  Dx, Dy     = 2*Rx/Nx, 2*Ry/Ny
-  Sx, Sy     = 1,       2
-  Fx, Fy     = Nx//Sx,  Ny//Sy
-  x          = np.linspace(Dx/2-Rx, Rx-Dx/2, num = Nx)
-  y          = np.linspace(Dy/2-Ry, Ry-Dy/2, num = Ny)
-  Y, X       = np.meshgrid(y, x, sparse=True)               # knots grid in x and y
-  R          = np.where((X*X+Y*Y)>1.0, 0.0, 1.0-X*X-Y*Y)
-  R          = np.sqrt(R)
-  νx         = F_F_T.fftshift(F_F_T.fftfreq(Fx, d=Dx*Sx))      # FFT frequencies in x 
-  νy         = F_F_T.fftshift(F_F_T.fftfreq(Fy, d=Dy*Sy))      # FFT frequencies in y 
-  νy, νx     = np.meshgrid(νy, νx)                             # FFT grid in νx and νy
-  ρ          = 2*π*(νx**2 + νy**2)**0.5
-  ρ          = np.where(ρ!=0.0, ρ, 1.e-4)
-  Hankel     = np.sin(ρ)/ρ #* np.exp(-2*π*π*((σx*νx)**2 + (σy*νy)**2))
-#    Hankel     = np.where(abs(Hankel)<1e-3, 0.0, Hankel)
-  emittance  = [None, None]                                 # σx, σy
-  stockspar  = [None, None, None, None, None]               # ξ1, ξ2, ζx, ζy, ζz
 
   def __init__(self, setup):
+    self.κ     = setup.κ
     θo         = setup.θo*setup.γ
-    iθo        = 1./(1+θo*θo)**0.5
-    rθo        = θo*iθo
-    uoκ        = 0.5*(1 + rθo*self.X)                         #  u over kappa
-    Δuoκ       = 0.5*self.R*iθo                               # Δu over kappa
-    uoκup      = uoκ + Δuoκ
-    uoκdn      = uoκ - Δuoκ
-    u          = uoκ*setup.κ                                  # u
-    Δu         = Δuoκ*setup.κ                                 # Δu
-    idnup1     = 1/(1+u+Δu)                                   # 1/(1 + u) +
-    idnup2     = idnup1*idnup1                                # inverse denominator +
-    idnup3     = idnup1*idnup2                                # inverse denominator +
-    idndn1     = 1/(1+u-Δu)                                   # 1/(1 + u) -
-    idndn2     = idndn1*idndn1                                # inverse denominator -
-    idndn3     = idndn1*idndn2                                # inverse denominator -
-    self.xs0   = idnup3 + idnup1 - 4*idnup2*uoκup*(1-uoκup)   # unpolarized xSection +
-    self.xs0  += idndn3 + idndn1 - 4*idndn2*uoκdn*(1-uoκdn)   # unpolarized xSection -
-#    self.xs1 = idn2                                         # vert/hor linear laser polarization ξ1
-#    self.xs2 = idn2 * self.X/θo * self.Y                    # diagonal linear laser polarization ξ2
-#    self.xsx = idn3*u*self.X/θo                             # transverse horizontal electron polarization
-#    self.xsy = idn3*u*self.Y                                # transverse vertical electron polarization
-#    self.xsz =-idn3*u*(u + 2)*self.X                        # longitudinal electron polarization
+    self.A     = 1/(1 + θo**2)**0.5
+    self.B     = θo*self.A
+    self.xs    = [None for i in range(6)]
+    self.x     =  None
+    self.y     =  None
 
-  def Prepare(self, parameters):
-    ξ1, ξ2, ζx, ζy, ζz, σx, σy = parameters
-    change = False
-    if [σx, σy]     != self.emittance:
-      change = True
-      self.emittance = [σx, σy]
-      HA             = self.Hankel * np.exp(-2*π*π*((σx*self.νx)**2 + (σy*self.νy)**2))        # Fourier image by convolution theorem
-#      GA             = self.Gankel * np.exp(-2*π*π*((σx*self.νx)**2 + (σy*self.νy)**2))        # Fourier image by convolution theorem
-#      FU             = self.Fourie * np.exp(-2*(π*σx*self.u)**2)
-#      self.CV0       = F_F_T.ifftshift(F_F_T.irfft(FU, workers=-1, norm='forward'))
-      self.CV1       = np.abs(F_F_T.ifftshift(F_F_T.ifft2(HA, s=[self.Nx, self.Ny], workers=-1, norm='forward'))) # convolution result
-#      self.CV1       = np.abs(F_F_T.ifftshift(F_F_T.irfft2(HA, s=[self.N, self.N], workers=-1, norm='forward'))) # convolution result
-#      self.CV2       = np.abs(F_F_T.ifftshift(F_F_T.irfft2(GA, s=[self.N, self.N], workers=-1, norm='forward'))) # convolution result
-      print('emittance: σx={:8.6f} σy={:8.6f} '.format(σx, σy))#, end = '')
-    if ([ξ1, ξ2, ζx, ζy, ζz] != self.stockspar) or change:
-      self.stockspar = [ξ1, ξ2, ζx, ζy, ζz]
-#      self.xs        = (self.xsa + self.xsb * self.CV0 + ξ2*self.xs2 + ζx*self.xsx + ζy*self.xsy + ζz*self.xsz)*self.CV1
-#      self.xs       += ξ1*self.xs1*(-self.CV2 - self.Y**2*self.CV1)
-      self.xs        = self.CV1 * self.xs0
-      print('stockspar: ξ1={:8.6f} ζy={:8.6f} ζz={:8.6f} '.format(ξ1, ζy, ζz))#, end = '')
-    self.SPLINE      =  R_B_S(self.x, self.y, self.xs, kx=3, ky=3, s = 0 )  # this is the RectBivariateSpline
-#    self.SPLINE      =  R_B_S(self.y, self.x, self.xst*self.CV, kx=3, ky=3, s = 0 )  # this is the RectBivariateSpline
+  def Components(self):
+    R          = np.real(np.emath.sqrt(1.0 - self.x**2 - self.y**2))             # 'Root' - square root
+    Δ          = {'+': self.B*self.x + self.A*R,  '-': self.B*self.x - self.A*R} # Δ±
+    Δ2         = {'+': Δ['+']**2,                 '-': Δ['-']**2               } # (Δ±)^2
+    δ          = {'+':-self.A*self.x + self.B*R,  '-':-self.A*self.x - self.B*R} # δ±
+    u          = {'+':  0.5*self.κ*(1 + Δ['+']),  '-':  0.5*self.κ*(1 + Δ['-'])} # u±
+    u1         = {'+': 1 + u['+'],                '-': 1 + u['-']              } # (1 + u±)
+    u12        = {'+': u1['+']**2,                '-': u1['-']**2              } # (1 + u±)^2
+    u13        = {'+': u1['+']*u12['+'],          '-': u1['-']*u12['-']        } # (1 + u±)^3
+    self.xs[0] = ((1+u12['+']-u1['+']*(1-Δ2['+']))/u13['+'] + (1+u12['-']-u1['-']*(1-Δ2['-']))/u13['-'])/2 # unpolarized part
+    self.xs[1] = ((δ['+']**2 - self.y**2)         /u12['+'] + (δ['-']**2 - self.y**2)         /u12['-'])/2 # vert/hor linear laser polarization ξ1
+    self.xs[2] = -(δ['+']    * self.y             /u12['+'] +  δ['-']    * self.y             /u12['-'])   # diagonal linear laser polarization ξ2
+    self.xs[3] = -(δ['+']    * u['+']             /u13['+'] +  δ['-']    * u['-']             /u13['-'])/2 # x electron polarization
+    self.xs[4] =  (u['+']    * self.y             /u13['+'] +  u['-']    * self.y             /u13['-'])/2 # y electron polarization
+    self.xs[5] = -(u['+'] * (2 + u['+']) * Δ['+'] /u13['+'] +  u['-'] * (2 + u['-']) * Δ['-'] /u13['-'])/2 # z electron polarization
+
+  def Total(self, parameters):
+    ξ1, ξ2, ζx, ζy, ζz = parameters
+    self.xst  = 1e+3*(self.xs[0] + ξ1*self.xs[1] + ξ2*self.xs[2] + ζx*self.xs[3] + ζy*self.xs[4] + ζz*self.xs[5])
 
 
 class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
   def __init__(self, EPD, setup):
-    self.iteration, self.ellipse, self.compton = 0, [], []
-    self.X_npix, self.X_pix, self.X_beam = EPD.X_npix, EPD.X_pix, EPD.X_beam
-    self.Y_npix, self.Y_pix, self.Y_beam = EPD.Y_npix, EPD.Y_pix, EPD.Y_beam
-    self.xmid_n      = np.zeros(EPD.X_npix, dtype = np.double)
-    self.ymid_n      = np.zeros(EPD.Y_npix, dtype = np.double)
+    self.Xm = 2
+    self.Ym = 4
+    self.iteration, self.ellipse, self.compton, self.emittance = 0, [], [], []
+    self.X_npix, self.X_pix, self.X_beam = EPD.X_npix*self.Xm, EPD.X_pix/self.Xm, EPD.X_beam
+    self.Y_npix, self.Y_pix, self.Y_beam = EPD.Y_npix*self.Ym, EPD.Y_pix/self.Ym, EPD.Y_beam
+    self.gridx       = np.ones( self.X_npix+1,                dtype = np.double) # x grid knots
+    self.gridy       = np.ones( self.Y_npix+1,                dtype = np.double) # y grid knots
+    self.pixcx       = np.zeros( self.X_npix,                 dtype = np.double) # x pixel centers
+    self.pixcy       = np.zeros( self.Y_npix,                 dtype = np.double) # y pixel centers
+    self.Ax, self.Bx = 1/EPD.X_pix, - self.X_beam/EPD.X_pix
+    self.Ay, self.By = 1/EPD.Y_pix, - self.Y_beam/EPD.Y_pix
     self.XS          = Electrons(setup)
-    self.Ax, self.Bx = 1/EPD.X_pix, - EPD.X_beam/EPD.X_pix
-    self.Ay, self.By = 1/EPD.Y_pix, - EPD.Y_beam/EPD.Y_pix
 
   def __call__(self,x,p):
-    ellipse, compton, change = [p[i] for i in (0,1,2,3)], [p[i] for i in (4,5,6,7,8,9,10)], False
-    if self.compton != compton: # if Compton parameters changed
-      self.compton = compton;                  change = True
-      self.XS.Prepare(compton)
+    ellipse,  compton = [p[i] for i in (0,1,2,3)], [p[i] for i in (4,5,6,7,8)]
+    emittance, change = [p[9]/self.X_pix, p[10]/self.Y_pix], False
+
     if self.ellipse != ellipse: # if geometry parameters changed
       self.ellipse = X0, X1, Y0, Y1 = ellipse; change = True
+      print ('X0={:8.3f} X1={:8.3f} Y0={:6.3f} Y1={:6.3f}'.format(X0, X1, Y0, Y1))
       # 1) center position [mm]        2) unit radius [1/mm]
       CX = self.X_beam - (X1 + X0)/2;  RX = 2/(X1-X0)
       CY = self.Y_beam - (Y1 + Y0)/2;  RY = 2/(Y1-Y0)
-      for xpix in range(self.X_npix):  self.xmid_n[xpix] = RX*(CX + (xpix+0.5)*self.X_pix)
-      for ypix in range(self.Y_npix):  self.ymid_n[ypix] = RY*(CY + (ypix+0.5)*self.Y_pix)
+      for xpix in range(self.X_npix): 
+        g = RX*(CX + xpix*self.X_pix)
+        self.gridx[xpix] = -1.*(g<-1) + g*(-1<g<1) + 1.*(g>1)
+        self.pixcx[xpix] = g + 0.5*RX*self.X_pix
+      for ypix in range(self.Y_npix):
+        g = RY*(CY + ypix*self.Y_pix) 
+        self.gridy[ypix] = -1.*(g<-1) + g*(-1<g<1) + 1.*(g>1)
+        self.pixcy[ypix] = g + 0.5*RY*self.Y_pix
+      X, Y  = np.meshgrid(self.gridx, self.gridy, indexing='ij')
+      R = np.real(np.emath.sqrt(1.0 - X**2 - Y**2)) 
+      I = X*np.arctan2(Y,R) + Y*np.arctan2(X,R) - np.arctan2(X*Y,R)
+      self.dxdy = I[:-1,:-1] + I[1:,1:] - I[1:,:-1] - I[:-1,1:]
+      self.dxdy = np.where(self.dxdy<1e-10, 0, self.dxdy)
+      self.XS.x, self.XS.y = np.meshgrid(self.pixcx, self.pixcy, indexing='ij')
+      if self.iteration == 0: self.XS.Components()
+    if self.compton != compton or change: # if Compton parameters changed
+      self.compton = ξ1, ξ2, ζx, ζy, ζz = compton; change = True
+      self.XS.Total(compton)
+      self.cs = self.XS.xst*self.dxdy
+      print ('ξ1={:6.3f} ξ2={:6.3f} ζx={:6.3f} ζy={:6.3f} ζz={:6.3f}'.format(ξ1, ξ2, ζx, ζy, ζz))
+    if self.emittance != emittance or change:  # if emittance parameters changed
+      self.emittance = σx, σy = emittance; change = True
+      print ('σx={:8.5f} σy={:8.5f}'.format(σx, σy))
+      self.convolution         = GAUSS(self.cs, sigma = emittance, truncate=4.0, mode='constant')
     if change:
-      self.BLUR = self.XS.SPLINE(self.xmid_n, self.ymid_n)
       self.iteration += 1;   print('iteration: %d ' % (self.iteration))
-    return p[11]*self.BLUR[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
+    res = 0.0
+    for i in range(self.Xm):
+      xbin = int(self.Ax*x[0] + self.Bx)*self.Xm + i
+      for j in range(self.Ym):
+        res += self.convolution[xbin][int(self.Ay*x[1] + self.By)*self.Ym+j]
+    return p[11]*res
+#    return p[11]*self.convolution[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
 
 
-
-"""
-  R          = 1.1                                          # calculation range in unit radius
-  N          = 2048                                         # number of x,y divisions
-  D          = 2*R/N                                        # distance between knots
-  x          = np.linspace(D/2-R, R-D/2, num=N)             # knots positions in x
-  y          = x.copy()                                     # knots positions in y
-  Y, X       = np.meshgrid(y, x, sparse=True)               # knots grid in x and y
-  R          = np.where((X*X+Y*Y)>1.0, 0.0, 1.0-X*X-Y*Y)
-  R          = np.sqrt(R)
-  νx         = F_F_T.fftshift(F_F_T.fftfreq(N//16, d=D*16))  # FFT frequencies in x 
-  νy         = F_F_T.fftshift(F_F_T.fftfreq(N//32, d=D*32)) # FFT frequencies in y
-  νy, νx     = np.meshgrid(νy, νx, sparse=True)             # FFT grid in νx and νy
-  ρ          = 2*π*(νx**2 + νy**2)**0.5
-  ρ          = np.where(ρ!=0.0, ρ, 1.e-20)
-  Hankel     = np.sin(ρ)/ρ                                  # numpy function sinc(x) = sin(πx)/(πx)
-#  Gankel     = (Hankel-np.cos(ρ))/ρ**2                      # numpy function sinc(x) = sin(πx)/(πx)
-
-#  u          = 2*π*F_F_T.rfftfreq(N, d = D)
-#  u          = np.where(u!=0.0, u, 1.e-5)
-#  Fourie     = 1.25*(np.sin(u)/u - np.cos(u))/u**2 
-"""
 
