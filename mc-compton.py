@@ -35,14 +35,14 @@ class MonteCarlo(XSMC):
     θe   = θp * self.u[0]                     # electron scattering   angle [rad]
     θex  = θex - θe*cos                       # electron scattering x-angle [rad]
     θey  = θey - θe*sin                       # electron scattering y-angle [rad]
-    uθo  = Sptr.θo*(self.u[0] - Δ/(1+Δ))      # electron   bending    angle [rad]
-    return x, y, θpx, θpy, θex, θey, uθo
+    uΔ   = self.u[0] - Δ/(1+Δ)                # electron bending angle / θo 
+    return x, y, θpx, θpy, θex, θey, uΔ
 
 
 def main(argv):
   S      = Sptr()
   print('Laser ωo:                %.3f eV'   % (Laser.ωo))
-  print('Comptony κ-parameter:    %.3f'      % (S.κ))
+  print('Comptony κ-parameter:    %.4f'      % (S.κ))
   print('beam γ-factor:           %.3f'      % (S.γ))
   print('beam bending angle:      %.3f mrad' % (1000*S.θo))
   print('beam bending angle:      %.3f 1/γ'  % (S.γ*S.θo))
@@ -72,15 +72,16 @@ def main(argv):
   cv = ROOT.TCanvas('cv','cv',0,0,1600,1200)
   cv.Divide(2,2)
   for p in range(4): cv.GetPad(p+1).SetGrid()
-  L1     = 1000*S.leip_L     # scattering base [mm]
-  L2     = 1000*S.spec_L     #    bending base [mm]
+  L1     = 1000*S.leip_L                         # scattering base [mm]
+  L2     = 1000*S.spec_L*ROOT.TMath.Tan(S.θo)    # tan(θo) * bending base [mm]
+  icos   = 1./ROOT.TMath.Cos(S.θo)
   for i in range(100):
     for j in range(100000):
-      x, y, θpx, θpy, θex, θey, uθo = G.game()
-      xp = x + L1*θpx - L2*S.θo
-      yp = y + L1*θpy
-      xe = x + L1*θex + L2*uθo
-      ye = y + L1*θey
+      x, y, θpx, θpy, θex, θey, uΔ = G.game()
+      xp = icos*(x + L1*ROOT.TMath.Tan(θpx)) - L2
+      yp =       y + L1*ROOT.TMath.Tan(θpy)
+      xe = icos*(x + L1*ROOT.TMath.Tan(θex)) + L2*uΔ
+      ye =       y + L1*ROOT.TMath.Tan(θey)
       if xe > EPD.X_beam:
         XYe.Fill(xe,ye); Ye.Fill(ye)
       if Xpmin < xp < Xpmax and Ypmin < yp < Ypmax:

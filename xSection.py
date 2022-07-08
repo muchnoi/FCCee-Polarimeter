@@ -1,9 +1,9 @@
 import ROOT
 from hardware import Laser, Spectrometer
 import numpy as np; π = np.pi
-from scipy             import fft                 as F_F_T
-from scipy.interpolate import RectBivariateSpline as R_B_S
 from scipy.ndimage     import gaussian_filter     as GAUSS
+#from scipy             import fft                 as F_F_T
+#from scipy.interpolate import RectBivariateSpline as R_B_S
 #from scipy.ndimage     import fourier_gaussian    as GAUSS
 
 
@@ -43,8 +43,8 @@ class Photons: # THIS IS THE CROSS SECTION FOR SCATTERED PHOTONS (dσ / dηx dη
     u1         = 1 + u                                   # 1 + u
     idn2       = 1/u1**2                                 # inverse denominator
     idn3       = idn2/u1                                 # inverse denominator
-    self.xs[0] = 2 *idn3*uoκ2*(1+u1**2-4*u1*uoκ*(1-uoκ)) # unpolarized xSection
-    self.xs[1] = 8 *idn2*uoκ4 *(self.ηx**2 - self.ηy**2) # vert/hor linear laser polarization ξ1
+    self.xs[0] =  2*idn3*uoκ2*(1+u1**2-4*u1*uoκ*(1-uoκ)) # unpolarized xSection
+    self.xs[1] =  8*idn2*uoκ4 *(self.ηx**2 - self.ηy**2) # vert/hor linear laser polarization ξ1
     self.xs[2] = 16*idn2*uoκ4 * self.ηx    * self.ηy     # diagonal linear laser polarization ξ2
     self.xs[3] = -4*idn3*uoκ3 * u * self.ηx              # transverse horizontal electron polarization
     self.xs[4] = -4*idn3*uoκ3 * u * self.ηy              # transverse vertical electron polarization
@@ -58,16 +58,19 @@ class Photons: # THIS IS THE CROSS SECTION FOR SCATTERED PHOTONS (dσ / dηx dη
 
 
 class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
-  def __init__(self, PPD, setup, rebin=1):
+  def __init__(self, PPD, setup):
+    self.Xm = 2 # number of each pixel subdivisions in X (for integration)
+    self.Ym = 4 # number of each pixel subdivisions in Y (for integration)
+
     self.iteration, self.position, self.compton, self.emittance = 0, [], [], []
-    self.X_npix, self.X_pix, self.X_beam = PPD.X_npix//rebin, PPD.X_pix*rebin, PPD.X_beam
-    self.Y_npix, self.Y_pix, self.Y_beam = PPD.Y_npix//rebin, PPD.Y_pix*rebin, PPD.Y_beam
+    self.X_npix, self.X_pix, self.X_beam = PPD.X_npix*self.Xm, PPD.X_pix/self.Xm, PPD.X_beam
+    self.Y_npix, self.Y_pix, self.Y_beam = PPD.Y_npix*self.Ym, PPD.Y_pix/self.Ym, PPD.Y_beam
     self.xmid_n = np.zeros(self.X_npix, dtype=np.double)
     self.ymid_n = np.zeros(self.Y_npix, dtype=np.double)
     self.ibase  = 1.e-3*setup.γ/setup.leip_L # from mm to 1/γ
     self.XS     = Photons(setup)
-    self.Ax, self.Bx = 1/self.X_pix, - PPD.X_beam/self.X_pix
-    self.Ay, self.By = 1/self.Y_pix, - PPD.Y_beam/self.Y_pix
+    self.Ax, self.Bx = 1/PPD.X_pix, - PPD.X_beam/PPD.X_pix
+    self.Ay, self.By = 1/PPD.Y_pix, - PPD.Y_beam/PPD.Y_pix
 
   def __call__(self, x, p):
     position, compton, change = [p[i] for i in (0,1)], [p[i] for i in (2,3,4,5,6)], False
@@ -84,11 +87,17 @@ class pPIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED PHOTONS  +=+=+=+=+=+=+
       self.XS.Total(compton)
     if (self.emittance != emittance) or change:  # if emittance parameters changed
       self.emittance = emittance
-      self.convolution         = GAUSS(self.XS.xst, sigma = emittance, truncate=5.0)
+      self.convolution         = GAUSS(self.XS.xst, sigma = emittance, truncate=5.0, mode='nearest')
 #      print('emittance: σx={:8.6f} σy={:8.6f} '.format(emittance[0],emittance[1]))#, end = '')
       self.iteration += 1;
       if np.random.rand()<0.05:  print('iteration: %d ' % (self.iteration))
-    return p[9]*self.convolution[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
+    res = 0.0
+    for i in range(self.Xm):
+      xbin = int(self.Ax*x[0] + self.Bx)*self.Xm + i
+      for j in range(self.Ym):
+        res += self.convolution[xbin][int(self.Ay*x[1] + self.By)*self.Ym + j]
+    return p[9]*res
+#    return p[9]*self.convolution[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
 
 
 class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx dy) +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -112,7 +121,7 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
     u12        = {'+': u1['+']**2,                '-': u1['-']**2              } # (1 + u±)^2
     u13        = {'+': u1['+']*u12['+'],          '-': u1['-']*u12['-']        } # (1 + u±)^3
     self.xs[0] = ((1+u12['+']-u1['+']*(1-Δ2['+']))/u13['+'] + (1+u12['-']-u1['-']*(1-Δ2['-']))/u13['-'])/2 # unpolarized part
-    self.xs[1] = ((δ['+']**2 - self.y**2)         /u12['+'] + (δ['-']**2 - self.y**2)         /u12['-'])/2 # vert/hor linear laser polarization ξ1
+    self.xs[1] = ((δ['+']**2 - self.y**2)         /u12['+'] + (δ['-']**2 - self.y**2)         /u12['-'])/2 # hor/vert linear laser polarization ξ1
     self.xs[2] = -(δ['+']    * self.y             /u12['+'] +  δ['-']    * self.y             /u12['-'])   # diagonal linear laser polarization ξ2
     self.xs[3] = -(δ['+']    * u['+']             /u13['+'] +  δ['-']    * u['-']             /u13['-'])/2 # x electron polarization
     self.xs[4] =  (u['+']    * self.y             /u13['+'] +  u['-']    * self.y             /u13['-'])/2 # y electron polarization
@@ -125,13 +134,13 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
 
 class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
   def __init__(self, EPD, setup):
-    self.Xm = 2
-    self.Ym = 4
+    self.Xm = 2 # number of each pixel subdivisions in X (for integration)
+    self.Ym = 5 # number of each pixel subdivisions in Y (for integration)
     self.iteration, self.ellipse, self.compton, self.emittance = 0, [], [], []
     self.X_npix, self.X_pix, self.X_beam = EPD.X_npix*self.Xm, EPD.X_pix/self.Xm, EPD.X_beam
     self.Y_npix, self.Y_pix, self.Y_beam = EPD.Y_npix*self.Ym, EPD.Y_pix/self.Ym, EPD.Y_beam
-    self.gridx       = np.ones( self.X_npix+1,                dtype = np.double) # x grid knots
-    self.gridy       = np.ones( self.Y_npix+1,                dtype = np.double) # y grid knots
+    self.gridx       = np.ones(  self.X_npix + 1,             dtype = np.double) # x grid knots
+    self.gridy       = np.ones(  self.Y_npix + 1,             dtype = np.double) # y grid knots
     self.pixcx       = np.zeros( self.X_npix,                 dtype = np.double) # x pixel centers
     self.pixcy       = np.zeros( self.Y_npix,                 dtype = np.double) # y pixel centers
     self.Ax, self.Bx = 1/EPD.X_pix, - self.X_beam/EPD.X_pix
@@ -170,7 +179,7 @@ class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+
       print ('ξ1={:6.3f} ξ2={:6.3f} ζx={:6.3f} ζy={:6.3f} ζz={:6.3f}'.format(ξ1, ξ2, ζx, ζy, ζz))
     if self.emittance != emittance or change:  # if emittance parameters changed
       self.emittance = σx, σy = emittance; change = True
-      print ('σx={:8.5f} σy={:8.5f}'.format(σx, σy))
+      print ('σx = {:8.5f} pix, σy = {:8.5f} pix'.format(σx, σy))
       self.convolution         = GAUSS(self.cs, sigma = emittance, truncate=4.0, mode='constant')
     if change:
       self.iteration += 1;   print('iteration: %d ' % (self.iteration))
@@ -178,9 +187,7 @@ class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+
     for i in range(self.Xm):
       xbin = int(self.Ax*x[0] + self.Bx)*self.Xm + i
       for j in range(self.Ym):
-        res += self.convolution[xbin][int(self.Ay*x[1] + self.By)*self.Ym+j]
+        res += self.convolution[xbin][int(self.Ay*x[1] + self.By)*self.Ym + j]
     return p[11]*res
-#    return p[11]*self.convolution[int(self.Ax*x[0] + self.Bx)][int(self.Ay*x[1] + self.By)]
-
 
 
