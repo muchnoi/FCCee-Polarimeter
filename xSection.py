@@ -120,12 +120,12 @@ class Electrons: # THIS IS THE CROSS SECTION FOR SCATTERED ELECTRONS  (dσ / dx 
     u1         = {'+': 1 + u['+'],                '-': 1 + u['-']              } # (1 + u±)
     u12        = {'+': u1['+']**2,                '-': u1['-']**2              } # (1 + u±)^2
     u13        = {'+': u1['+']*u12['+'],          '-': u1['-']*u12['-']        } # (1 + u±)^3
-    self.xs[0] = ((1+u12['+']-u1['+']*(1-Δ2['+']))/u13['+'] + (1+u12['-']-u1['-']*(1-Δ2['-']))/u13['-'])/2 # unpolarized part
-    self.xs[1] = ((δ['+']**2 - self.y**2)         /u12['+'] + (δ['-']**2 - self.y**2)         /u12['-'])/2 # hor/vert linear laser polarization ξ1
-    self.xs[2] = -(δ['+']    * self.y             /u12['+'] +  δ['-']    * self.y             /u12['-'])   # diagonal linear laser polarization ξ2
-    self.xs[3] = -(δ['+']    * u['+']             /u13['+'] +  δ['-']    * u['-']             /u13['-'])/2 # x electron polarization
-    self.xs[4] =  (u['+']    * self.y             /u13['+'] +  u['-']    * self.y             /u13['-'])/2 # y electron polarization
-    self.xs[5] = -(u['+'] * (2 + u['+']) * Δ['+'] /u13['+'] +  u['-'] * (2 + u['-']) * Δ['-'] /u13['-'])/2 # z electron polarization
+    self.xs[0] = ((1+u12['+']-u1['+']*(1-Δ2['+']))/u13['+'] + (1+u12['-']-u1['-']*(1-Δ2['-']))/u13['-'])*0.5 # unpolarized part
+    self.xs[1] = ((δ['+']**2 - self.y**2)         /u12['+'] + (δ['-']**2 - self.y**2)         /u12['-'])*0.5 # hor/vert linear laser polarization ξ1
+    self.xs[2] = -(δ['+']    * self.y             /u12['+'] +  δ['-']    * self.y             /u12['-'])     # diagonal linear laser polarization ξ2
+    self.xs[3] = -(δ['+']    * u['+']             /u13['+'] +  δ['-']    * u['-']             /u13['-'])*0.5 # x electron polarization
+    self.xs[4] =  (u['+']    * self.y             /u13['+'] +  u['-']    * self.y             /u13['-'])*0.5 # y electron polarization
+    self.xs[5] = -(u['+'] * (2 + u['+']) * Δ['+'] /u13['+'] +  u['-'] * (2 + u['-']) * Δ['-'] /u13['-'])*0.5 # z electron polarization
 
   def Total(self, parameters):
     ξ1, ξ2, ζx, ζy, ζz = parameters
@@ -180,7 +180,7 @@ class ePIXELS: # THIS IS THE PIXEL DETECTOR FOR SCATTERED ELECTRONS  +=+=+=+=+=+
     if self.emittance != emittance or change:  # if emittance parameters changed
       self.emittance = σx, σy = emittance; change = True
       print ('σx = {:8.5f} pix, σy = {:8.5f} pix'.format(σx, σy))
-      self.convolution         = GAUSS(self.cs, sigma = emittance, truncate=4.0, mode='constant')
+      self.convolution         = GAUSS(self.cs, sigma = emittance, truncate=6.0, mode='nearest')
     if change:
       self.iteration += 1;   print('iteration: %d ' % (self.iteration))
     res = 0.0

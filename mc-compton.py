@@ -2,7 +2,7 @@
 # Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω
 # α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω
 
-import ROOT, sys, pickle
+import ROOT, sys, pickle, copy
 from ctypes import c_double
 from time import asctime
 from hardware import EPD, PPD, Laser, Spectrometer as Sptr
@@ -94,8 +94,10 @@ def main(argv):
   print()
 
   if not ('n' or 'N') in input('Save data? (Yes/no)'):
-    SAVE = {};         SAVE['Laser'] = Laser;       SAVE['Spectrometer'] = Sptr
-    SAVE['EPD'] = EPD; SAVE['PPD'] = PPD; SAVE['XYe'] = XYe; SAVE['XYp'] = XYp
+    with open('hardware.py', 'r') as fp:  content = fp.readlines()
+    SAVE = {}
+    SAVE['HW'] = content
+    SAVE['XYe'] = XYe; SAVE['XYp'] = XYp
     fname = asctime().replace(' ','_').replace(':','') + '.MC'
     with open(fname, 'wb') as fp:  pickle.dump(SAVE, fp, -1)
     print('Data saved to %s' % fname)

@@ -10,8 +10,8 @@ class Constants:
 class Laser:
   λo     = 0.532e-4                    # λo, cm
   ωo     = Constants.hc/λo             # ωo, eV
-  ξ1     = 0.1                        # laser linear polarization horizontal (ξ1=1) or vertical ξ1=-1
-  ξ2     = 0.1                        # laser linear polarization (φ=π/4 ξ2=1) or vertical (φ=-π/4 ξ2=-1)
+  ξ1     = 0.0                        # laser linear polarization horizontal (ξ1=1) or vertical ξ1=-1
+  ξ2     = 0.0                        # laser linear polarization (φ=π/4 ξ2=1) or vertical (φ=-π/4 ξ2=-1)
   ξ3     = (1 - ξ1**2 - ξ2**2)**0.5    # laser circular polarization degree ξ3 [-1:1]
 
 class Spectrometer:
@@ -32,9 +32,9 @@ class Spectrometer:
   σy     = 1000*(εy*βy)**0.5           # betatron size in y, mm
   ηx     = (εx/βx)**0.5                # betatron angular spread in x, rad
   ηy     = (εy/βy)**0.5                # betatron angular spread in y, rad
-  ζx     = 0.2                         # transverse electron spin polariztion along x
-  ζy     = 0.4                         # transverse electron spin polariztion along y
-  ζz     = 0.3                         # longitudinal electron spin polariztion along z
+  ζx     = 0.0                         # transverse electron spin polariztion along x
+  ζy     = 0.0                         # transverse electron spin polariztion along y
+  ζz     = 0.0                         # longitudinal electron spin polariztion along z
 
 class EPD:                             # Electron Pixel Detector
   X_beam = 15.0                        # beam-detector horizontal space, mm
